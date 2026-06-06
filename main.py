@@ -1,3 +1,15 @@
+"""Aplicação Streamlit para controle financeiro mensal.
+
+Funcionalidades principais:
+- Carrega/gera planilhas CSV por ano em formato despivotado (linhas por mês).
+- Exibe um editor tabular para editar/ adicionar/ remover lançamentos.
+- Salva os dados editados em `./csv/{ano}.csv` no formato original (despivotiado).
+- Gera visualizações (barras empilhadas e médias) por tipo e status (Efetivado/Previsto).
+
+Este arquivo contém funções auxiliares para carregar dados, mapear cores e
+construir a interface e os gráficos com Streamlit e Plotly.
+"""
+
 from pathlib import Path
 import pandas as pd
 import streamlit as st
@@ -5,12 +17,14 @@ import numpy as np
 import plotly.graph_objects as go
 import locale
 
+# Tenta configurar localidade para formatação de datas em português do Brasil.
 try:
     locale.setlocale(locale.LC_TIME, "pt_BR.utf8")
-except:
+except Exception:
     try:
         locale.setlocale(locale.LC_TIME, "portuguese_brazil")
-    except:
+    except Exception:
+        # Se falhar, continua com localidade padrão do sistema.
         pass
 
 MESES_MAPA = {
@@ -33,79 +47,99 @@ CORES_EXTRAS = [
 ]
 
 def obter_cor_tipo(tipo_str, index_reserva=0):
+    """Retorna uma cor RGB para um `tipo` (Receita/Despesa/etc).
+
+    Se o tipo estiver na paleta principal, usa-a; caso contrário, usa uma cor
+    da lista de cores extras (rotacionada por `index_reserva`).
+    """
     tipo_busca = str(tipo_str).strip().capitalize()
     if tipo_busca in PALETA_RGB:
         return PALETA_RGB[tipo_busca]
     return CORES_EXTRAS[index_reserva % len(CORES_EXTRAS)]
 
 def carregar_ou_criar_df(ano_selecionado):
+    """Carrega o CSV do ano se existir ou cria um DataFrame base para o ano.
+
+    - Se existir `./csv/{ano}.csv`, carrega e garante a coluna `Pago`.
+    - Caso não exista e o ano seja atual/futuro, tenta reutilizar o arquivo CSV
+      mais recente como molde (ajustando o campo `Data` para o ano selecionado).
+    - Se nenhum molde for encontrado, cria 12 linhas base (01/MM/ANO) com valores zerados.
+
+    Retorna o DataFrame pivotado por Item/Tipo/Categoria com colunas dos meses
+    e colunas auxiliares `{Mes} - Pago` para indicar realização.
+    """
     caminho_pasta = Path("./csv")
     caminho_pasta.mkdir(parents=True, exist_ok=True)
     caminho_arquivo = caminho_pasta / f"{ano_selecionado}.csv"
-    
+
     ano_atual_sistema = pd.Timestamp.now().year
     df = pd.DataFrame()
 
+    # Se existir arquivo para o ano, carrega diretamente
     if caminho_arquivo.exists():
         df = pd.read_csv(caminho_arquivo)
-        if 'Pago' not in df.columns: 
+        if 'Pago' not in df.columns:
             df['Pago'] = False
     else:
+        # Tenta reutilizar o CSV mais recente como molde para anos atuais/ futuros
         if ano_selecionado >= ano_atual_sistema:
             arquivos_csv = [f for f in caminho_pasta.glob("*.csv") if f.stem.isdigit()]
-            
             if arquivos_csv:
                 arquivo_mais_recente = max(arquivos_csv, key=lambda x: int(x.stem))
                 df_molde = pd.read_csv(arquivo_mais_recente)
                 df_molde['Pago'] = False
-                
+
                 def atualizar_ano_string(data_str):
                     partes = str(data_str).split('/')
                     if len(partes) == 3:
                         return f"{partes[0]}/{partes[1]}/{ano_selecionado}"
                     return data_str
-                
+
                 df_molde['Data'] = df_molde['Data'].apply(atualizar_ano_string)
                 df = df_molde
-        
+
+        # Se ainda estiver vazio, cria 12 linhas padrão (um por mês)
         if df.empty:
             for i in range(1, 13):
                 nova_linha = pd.DataFrame(
-                    [[f"01/{i:02d}/{ano_selecionado}", "", "", "", 0.0, False]], 
+                    [[f"01/{i:02d}/{ano_selecionado}", "", "", "", 0.0, False]],
                     columns=['Data', 'Item', 'Tipo', 'Categoria', 'Valor', 'Pago']
                 )
                 df = pd.concat([df, nova_linha], ignore_index=True)
-            
+
+    # Normaliza datas e cria coluna com nome do mês (abreviado)
     df['Data_DT'] = pd.to_datetime(df['Data'], format='%d/%m/%Y')
     df['Mes_Nome'] = df['Data_DT'].dt.month.map(MESES_MAPA)
-    
+
+    # Pivot: valores por mês e flags de pagamento por mês
     df_valor = df.pivot_table(index=['Item', 'Tipo', 'Categoria'], columns='Mes_Nome', values='Valor', aggfunc='sum').reset_index()
     df_pago = df.pivot_table(index=['Item', 'Tipo', 'Categoria'], columns='Mes_Nome', values='Pago', aggfunc='max').reset_index()
-    
+
     colunas_meses = [col for col in df_valor.columns if col not in ['Item', 'Tipo', 'Categoria']]
     for col in colunas_meses:
         df_pago = df_pago.rename(columns={col: f"{col} - Pago"})
-        
+
     df_pivotado = pd.merge(df_valor, df_pago, on=['Item', 'Tipo', 'Categoria'])
-    
+
+    # Reordena colunas para ficar Item/Tipo/Categoria, depois pares (Mês, Mês - Pago)
     colunas_finais = ['Item', 'Tipo', 'Categoria']
     meses_ordenados = [MESES_MAPA[i] for i in range(1, 13) if MESES_MAPA[i] in colunas_meses]
     for mes in meses_ordenados:
         colunas_finais.append(mes)
         colunas_finais.append(f"{mes} - Pago")
-        
+
     df_pivotado = df_pivotado.reindex(columns=colunas_finais)
     return df_pivotado.fillna(0.0).astype({'Item': 'str', 'Tipo': 'str', 'Categoria': 'str'})
 
 def main():
-    st.set_page_config(page_title="Controle Financeiro Anual", page_icon="📊", layout="wide")
-    st.title("Controle Financeiro Anual")
+    st.set_page_config(page_title="Controle Financeiro", page_icon="📊", layout="wide")
+    st.title("Controle Financeiro")
 
     col_ano, col_mes = st.columns(2)
     with col_ano:
         ano_atual = pd.Timestamp.now().year
         ano_selecionado = st.selectbox(
-            "Selecione o Ano de Trabalho:", 
+            "Selecione o Ano desejado:", 
             options=[ano_atual - 2, ano_atual - 1, ano_atual, ano_atual + 1], index=2
         )
 
