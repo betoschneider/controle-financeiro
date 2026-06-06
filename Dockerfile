@@ -19,7 +19,7 @@ RUN uv lock --upgrade
 COPY . .
 
 # Expor porta
-EXPOSE 8502
+EXPOSE 8503
 
 # Comando para executar
-CMD ["uv", "run", "streamlit", "run", "main.py", "--server.port=8502", "--server.address=0.0.0.0"]
+CMD ["uv", "run", "streamlit", "run", "main.py", "--server.port=8503", "--server.address=0.0.0.0"]
