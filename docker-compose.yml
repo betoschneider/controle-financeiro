@@ -1,0 +1,17 @@
+services:
+  carteira-investimento:
+    build: .
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    ports:
+      - "8502:8502"
+    volumes:
+      - ./.env:/app/.env
+      - ./csv/:/app/csv/
+      - ~/.streamlit:/root/.streamlit
+    environment:
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_PORT=8502
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+    restart: unless-stopped
