@@ -135,7 +135,7 @@ def main():
     st.set_page_config(page_title="Controle Financeiro", page_icon="📊", layout="wide")
     st.title("Controle Financeiro")
 
-    col_ano, col_mes = st.columns(2)
+    col_ano, col_mes, col_metric, col_metric_previsto = st.columns(4)
     with col_ano:
         ano_atual = pd.Timestamp.now().year
         ano_selecionado = st.selectbox(
@@ -158,10 +158,82 @@ def main():
         ascending=[False, True, False, False, True]
     ).reset_index(drop=True)
 
+    # Reconstrói os dados caso haja edições em andamento no session_state do editor
+    df_completo_atualizado = df_ordenado.copy()
+    colunas_base = ['Item', 'Tipo', 'Categoria']
+    estado_editor = st.session_state.get("df_editor_compras", {})
+
+    if estado_editor:
+        # 1. Aplica as células editadas (linhas existentes)
+        if "edited_rows" in estado_editor:
+            for idx, mudancas in estado_editor["edited_rows"].items():
+                for col, valor in mudancas.items():
+                    df_completo_atualizado.at[idx, col] = valor
+
+        # 2. Captura e acopla as linhas NOVAS criadas pelo usuário
+        if "added_rows" in estado_editor and estado_editor["added_rows"]:
+            df_novas_linhas = pd.DataFrame(estado_editor["added_rows"])
+            
+            # Preenche colunas ausentes (meses ocultos no filtro) com valores padrão
+            for col in df_ordenado.columns:
+                if col not in df_novas_linhas.columns:
+                    if " - Pago" in col:
+                        df_novas_linhas[col] = False
+                    elif col in colunas_base:
+                        df_novas_linhas[col] = ""
+                    else:
+                        df_novas_linhas[col] = 0.0
+                        
+            df_novas_linhas = df_novas_linhas[df_ordenado.columns]
+            df_completo_atualizado = pd.concat([df_completo_atualizado, df_novas_linhas], ignore_index=True)
+
+        # 3. Remove linhas marcadas para exclusão
+        if "deleted_rows" in estado_editor and estado_editor["deleted_rows"]:
+            df_completo_atualizado = df_completo_atualizado.drop(estado_editor["deleted_rows"]).reset_index(drop=True)
+
     with col_mes:
         opcoes_mes = ["Ano Completo"] + [MESES_MAPA[i] for i in range(1, 13)]
         mes_filtrado = st.selectbox("Filtrar Visão da Tabela:", options=opcoes_mes, index=0)
-
+        
+    with col_metric:
+        colunas_base = ['Item', 'Tipo', 'Categoria']
+        if mes_filtrado == "Ano Completo":
+            colunas_para_exibir = list(df_ordenado.columns)
+        else:
+            colunas_para_exibir = colunas_base + [mes_filtrado, f"{mes_filtrado} - Pago"]
+            
+        # Define o mês alvo dinamicamente
+        mes_alvo = mes_filtrado if mes_filtrado != "Ano Completo" else mes_atual_nome
+        mes_pago_alvo = f"{mes_alvo} - Pago"
+        
+        df_metric = df_completo_atualizado[["Tipo", mes_alvo, mes_pago_alvo]]
+        
+        # CORREÇÃO: Filtra diretamente a coluna mes_alvo para a soma
+        total_receita = df_metric[(df_metric["Tipo"] == "Receita") & (df_metric[mes_pago_alvo])][mes_alvo].sum()
+        total_not_receita = df_metric[(df_metric["Tipo"] != "Receita") & (df_metric[mes_pago_alvo])][mes_alvo].sum()
+        total_saldo = total_receita - total_not_receita
+        
+        st.metric(label=f"{mes_alvo}: Saldo Atual", value=f"R$ {total_saldo:,.2f}")
+    
+    with col_metric_previsto:
+        colunas_base = ['Item', 'Tipo', 'Categoria']
+        if mes_filtrado == "Ano Completo":
+            colunas_para_exibir = list(df_ordenado.columns)
+        else:
+            colunas_para_exibir = colunas_base + [mes_filtrado, f"{mes_filtrado} - Pago"]
+            
+        mes_alvo = mes_filtrado if mes_filtrado != "Ano Completo" else mes_atual_nome
+        mes_pago_alvo = f"{mes_alvo} - Pago"
+        
+        df_metric = df_completo_atualizado[["Tipo", mes_alvo, mes_pago_alvo]]
+        
+        # CORREÇÃO: Filtra diretamente a coluna mes_alvo para a soma projetada
+        total_receita = df_metric[df_metric["Tipo"] == "Receita"][mes_alvo].sum()
+        total_not_receita = df_metric[df_metric["Tipo"] != "Receita"][mes_alvo].sum()
+        total_saldo = total_receita - total_not_receita
+        
+        st.metric(label=f"{mes_alvo}: Saldo Projetado", value=f"R$ {total_saldo:,.2f}")
+        
     colunas_base = ['Item', 'Tipo', 'Categoria']
     if mes_filtrado == "Ano Completo":
         colunas_para_exibir = list(df_ordenado.columns)
@@ -188,39 +260,6 @@ def main():
         )
 
         if st.button(f"Salvar Dados de {ano_selecionado}", type="primary"):
-            # CORREÇÃO CRÍTICA: Reconstrói o DataFrame completo combinando a tabela base com as mudanças do editor
-            estado_editor = st.session_state["df_editor_compras"]
-            
-            # 1. Começamos com os dados antigos estruturados
-            df_completo_atualizado = df_ordenado.copy()
-            
-            # 2. Aplica as células editadas (linhas existentes)
-            if "edited_rows" in estado_editor:
-                for idx, mudancas in estado_editor["edited_rows"].items():
-                    for col, valor in mudancas.items():
-                        df_completo_atualizado.at[idx, col] = valor
-
-            # 3. Captura e acopla as linhas NOVAS criadas pelo usuário
-            if "added_rows" in estado_editor and estado_editor["added_rows"]:
-                df_novas_linhas = pd.DataFrame(estado_editor["added_rows"])
-                
-                # Preenche colunas ausentes (meses ocultos no filtro) com valores padrão
-                for col in df_ordenado.columns:
-                    if col not in df_novas_linhas.columns:
-                        if " - Pago" in col:
-                            df_novas_linhas[col] = False
-                        elif col in colunas_base:
-                            df_novas_linhas[col] = ""
-                        else:
-                            df_novas_linhas[col] = 0.0
-                            
-                df_novas_linhas = df_novas_linhas[df_ordenado.columns]
-                df_completo_atualizado = pd.concat([df_completo_atualizado, df_novas_linhas], ignore_index=True)
-
-            # 4. Remove linhas marcadas para exclusão
-            if "deleted_rows" in estado_editor and estado_editor["deleted_rows"]:
-                df_completo_atualizado = df_completo_atualizado.drop(estado_editor["deleted_rows"]).reset_index(drop=True)
-
             # Processamento para salvar no CSV despivotado
             colunas_meses_puras = [MESES_MAPA[i] for i in range(1, 13)]
             linhas_despivotiadas = []
@@ -246,21 +285,6 @@ def main():
             if "df_editor_compras" in st.session_state:
                 del st.session_state["df_editor_compras"]
                 st.rerun()
-        else:
-            # Garante que a aba de visualização colorida acompanhe as edições em tempo de execução
-            df_completo_atualizado = df_ordenado.copy()
-            if "edited_rows" in st.session_state["df_editor_compras"]:
-                for idx, mudancas in st.session_state["df_editor_compras"]["edited_rows"].items():
-                    for col, valor in mudancas.items():
-                        df_completo_atualizado.at[idx, col] = valor
-            if "added_rows" in st.session_state["df_editor_compras"] and st.session_state["df_editor_compras"]["added_rows"]:
-                df_novas_linhas = pd.DataFrame(st.session_state["df_editor_compras"]["added_rows"])
-                for col in df_ordenado.columns:
-                    if col not in df_novas_linhas.columns:
-                        df_novas_linhas[col] = False if " - Pago" in col else ("" if col in colunas_base else 0.0)
-                df_completo_atualizado = pd.concat([df_completo_atualizado, df_novas_linhas[df_ordenado.columns]], ignore_index=True)
-            if "deleted_rows" in st.session_state["df_editor_compras"]:
-                df_completo_atualizado = df_completo_atualizado.drop(st.session_state["df_editor_compras"]["deleted_rows"]).reset_index(drop=True)
 
     with tab_visualizar:
         st.subheader("Planilha com Formatação Condicional")
