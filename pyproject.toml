@@ -1,7 +1,7 @@
 [project]
-name = "gastos-cartao"
-version = "0.1.0"
-description = "Add your description here"
+name = "controle-financeiro"
+version = "0.2.0"
+description = "Aplicação Streamlit para controle financeiro mensal com editor interativo e gráficos."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

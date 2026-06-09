@@ -3,65 +3,72 @@
 
 Aplicação Streamlit para gerenciar lançamentos financeiros mensais por ano.
 
-**Funcionalidades**
-- Carregamento automático de CSVs por ano em `./csv/{ANO}.csv` (formato despivotado: uma linha por mês/lançamento).
-- Editor interativo para adicionar, editar e remover lançamentos.
-- Marcação de lançamentos como `Pago` por mês.
-- Visualização em tabela com formatação condicional (cores por tipo).
-- Gráfico combinado (barras empilhadas por Tipo e Status + média anual por tipo) usando Plotly.
+## Funcionalidades
+
+- **Editor interativo** para adicionar, editar e remover lançamentos com `st.data_editor`.
+- **Carregamento automático** de CSVs por ano em `./csv/{ANO}.csv` (formato despivotado: uma linha por mês/lançamento).
+- **Marcação de lançamentos como `Pago`** por mês (checkbox por célula).
+- **Métricas em tempo real**: Saldo Atual (efetivado) e Saldo Projetado (previsto), atualizados conforme o mês filtrado.
+- **✨ Preencher meses seguintes**: propaga automaticamente os valores do mês selecionado para os meses futuros que estejam zerados ou vazios — ideal para despesas e receitas fixas (aluguel, salário, assinaturas). O botão aparece apenas quando um mês específico está selecionado no filtro.
+- **Visualização em tabela** com formatação condicional (cores por tipo: Receita, Despesa, Investimento, Reserva).
+- **Gráfico combinado** (barras empilhadas por Tipo e Status + média anual por tipo) usando Plotly.
 - Ao salvar, os dados são normalizados (despivotados) e escritos em `./csv/{ANO}.csv`.
 
-**Requisitos**
+## Requisitos
+
 - Python 3.12+
-- `uv` (gerenciador/sincronizador de dependências usado no Dockerfile)
-- Opcional: Docker e Docker Compose (recomendado para reproduzir o ambiente usado)
+- [`uv`](https://docs.astral.sh/uv/) (gerenciador de dependências e virtualenvs)
+- Opcional: Docker e Docker Compose (recomendado para reproduzir o ambiente)
 
-O projeto usa `pyproject.toml` para declarar dependências e utiliza a ferramenta `uv` (via imagem ghcr.io/astral-sh/uv) dentro do Dockerfile para sincronizar dependências. Não é necessário `pip`/`requirements.txt` quando se usa o fluxo com `uv`.
+O projeto usa `pyproject.toml` para declarar dependências e `uv.lock` para travar versões. Não é necessário `pip` ou `requirements.txt`.
 
-**Executando (recomendado — Docker Compose)**
+## Executando
 
-Construa e rode o container (o Dockerfile já executa os comandos `uv` durante o build):
+### Docker Compose (recomendado)
+
+Construa e rode o container:
 
 ```bash
 docker compose up --build
 ```
 
-A aplicação ficará disponível em http://localhost:8502
+A aplicação ficará disponível em **http://localhost:8503**
 
-**Executando localmente com `uv` (sem Docker)**
+### Localmente com `uv` (sem Docker)
 
-Se você preferir executar localmente sem Docker e já tem `uv` disponível no sistema, rode:
+Se você já tem o `uv` instalado:
 
 ```bash
 uv sync --frozen --no-install-project --no-dev
-uv run streamlit run main.py --server.port=8502 --server.address=0.0.0.0
+uv run streamlit run main.py --server.port=8503 --server.address=0.0.0.0
 ```
 
-Se não tiver o binário `uv`, você pode usar a imagem oficial para executar os comandos `uv` sem instalar localmente (substitua `$(pwd)` por o caminho do projeto):
+### Localmente via imagem Docker do `uv` (sem instalar `uv`)
 
 ```bash
 docker run --rm -v "$(pwd)":/app -w /app ghcr.io/astral-sh/uv:latest uv sync --frozen --no-install-project --no-dev
-docker run --rm -v "$(pwd)":/app -w /app -p 8502:8502 ghcr.io/astral-sh/uv:latest uv run streamlit run main.py --server.port=8502 --server.address=0.0.0.0
+docker run --rm -v "$(pwd)":/app -w /app -p 8503:8503 ghcr.io/astral-sh/uv:latest uv run streamlit run main.py --server.port=8503 --server.address=0.0.0.0
 ```
 
-Esses comandos espelham o comportamento definido no `Dockerfile` e no `docker-compose.yml`.
+## Formato Esperado do CSV
 
-**Formato esperado do CSV (despivotado)**
-- Colunas: `Data` (dd/mm/AAAA), `Item`, `Tipo`, `Categoria`, `Valor`, `Pago`
+Colunas: `Data` (dd/mm/AAAA), `Item`, `Tipo`, `Categoria`, `Valor`, `Pago`
 
-Exemplo de linha:
+Exemplo:
 
-```
+```csv
+Data,Item,Tipo,Categoria,Valor,Pago
 01/03/2026,Salário,Receita,Trabalho,5000.00,True
+01/03/2026,Aluguel,Despesa,Moradia,1500.00,True
 ```
 
-**Arquitetura resumida**
-- `main.py`: interface Streamlit, lógica de carregamento/pivot/despivot e geração de gráficos.
-- `pyproject.toml`: declara as dependências do projeto.
-- `Dockerfile`: usa a imagem `ghcr.io/astral-sh/uv:latest` para obter o binário `uv`, sincronizar dependências e expor a aplicação.
-- `docker-compose.yml`: serviço `carteira-investimento` para rodar a aplicação com volumes e variáveis de ambiente já configuradas.
+## Arquitetura
 
-**Notas e próximos passos**
-- Se deseja, posso gerar um arquivo `uv.lock` ou um `requirements.txt` para facilitar execução sem `uv` (posso também adicionar instruções para instalar `uv` localmente).
-- Quer que eu atualize o `pyproject.toml` com descrição e metadados extras, ou gere instruções de deploy no README?
-
+| Arquivo | Descrição |
+|---|---|
+| `main.py` | Interface Streamlit, lógica de carregamento/pivot/despivot, propagação de valores e gráficos. |
+| `pyproject.toml` | Declaração de dependências e metadados do projeto. |
+| `uv.lock` | Lock file com versões exatas das dependências. |
+| `Dockerfile` | Imagem baseada em `python:3.12-slim` com `uv` para sincronizar dependências e expor a aplicação na porta 8503. |
+| `docker-compose.yml` | Serviço `carteira-investimento` com volumes para `.env`, `csv/` e config do Streamlit. |
+| `csv/` | Diretório com os arquivos CSV por ano (ignorado pelo `.gitignore`). |

@@ -131,11 +131,59 @@ def carregar_ou_criar_df(ano_selecionado):
     df_pivotado = df_pivotado.reindex(columns=colunas_finais)
     return df_pivotado.fillna(0.0).astype({'Item': 'str', 'Tipo': 'str', 'Categoria': 'str'})
 
+def propagar_valores_meses_seguintes(df, mes_origem):
+    """Propaga valores do mês de origem para os meses seguintes onde estiverem zerados.
+
+    Para cada linha do DataFrame pivotado:
+    - Se o valor no `mes_origem` for > 0, percorre os meses posteriores.
+    - Meses futuros com valor == 0.0 (ou NaN/vazio) recebem o valor do `mes_origem`.
+    - A flag `{Mês} - Pago` dos meses preenchidos é setada como False (previsão).
+    - Meses futuros que já possuam valor preenchido (> 0) são preservados.
+
+    Args:
+        df: DataFrame pivotado (colunas: Item, Tipo, Categoria, Jan, Jan - Pago, ...).
+        mes_origem: Nome abreviado do mês de origem (ex: "Jan", "Fev").
+
+    Returns:
+        DataFrame com os valores propagados.
+    """
+    df_resultado = df.copy()
+    num_mes_origem = MAPA_REVERSO_MES.get(mes_origem)
+    if num_mes_origem is None:
+        return df_resultado
+
+    # Meses que vêm depois do mês de origem
+    meses_futuros = [MESES_MAPA[i] for i in range(num_mes_origem + 1, 13)]
+    if not meses_futuros:
+        return df_resultado
+
+    for idx in df_resultado.index:
+        valor_origem = df_resultado.at[idx, mes_origem]
+        # Trata NaN como zero
+        if pd.isna(valor_origem):
+            continue
+        valor_origem = float(valor_origem)
+        if valor_origem <= 0:
+            continue
+
+        for mes_futuro in meses_futuros:
+            if mes_futuro not in df_resultado.columns:
+                continue
+            valor_futuro = df_resultado.at[idx, mes_futuro]
+            # Só substitui se o mês futuro estiver zerado ou vazio
+            if pd.isna(valor_futuro) or float(valor_futuro) == 0.0:
+                df_resultado.at[idx, mes_futuro] = valor_origem
+                col_pago = f"{mes_futuro} - Pago"
+                if col_pago in df_resultado.columns:
+                    df_resultado.at[idx, col_pago] = False
+
+    return df_resultado
+
 def main():
     st.set_page_config(page_title="Controle Financeiro", page_icon="📊", layout="wide")
     st.title("Controle Financeiro")
 
-    col_ano, col_mes, col_metric, col_metric_previsto = st.columns(4)
+    col_ano, col_mes, col_vazio, col_metrics = st.columns(4)
     with col_ano:
         ano_atual = pd.Timestamp.now().year
         ano_selecionado = st.selectbox(
@@ -194,45 +242,47 @@ def main():
     with col_mes:
         opcoes_mes = ["Ano Completo"] + [MESES_MAPA[i] for i in range(1, 13)]
         mes_filtrado = st.selectbox("Filtrar Visão da Tabela:", options=opcoes_mes, index=0)
-        
-    with col_metric:
-        colunas_base = ['Item', 'Tipo', 'Categoria']
-        if mes_filtrado == "Ano Completo":
-            colunas_para_exibir = list(df_ordenado.columns)
-        else:
-            colunas_para_exibir = colunas_base + [mes_filtrado, f"{mes_filtrado} - Pago"]
+
+    with col_metrics:
+        col_metric, col_metric_previsto = st.columns(2)    
+        with col_metric:
+            colunas_base = ['Item', 'Tipo', 'Categoria']
+            if mes_filtrado == "Ano Completo":
+                colunas_para_exibir = list(df_ordenado.columns)
+            else:
+                colunas_para_exibir = colunas_base + [mes_filtrado, f"{mes_filtrado} - Pago"]
+                
+            # Define o mês alvo dinamicamente
+            mes_alvo = mes_filtrado if mes_filtrado != "Ano Completo" else mes_atual_nome
+            mes_pago_alvo = f"{mes_alvo} - Pago"
             
-        # Define o mês alvo dinamicamente
-        mes_alvo = mes_filtrado if mes_filtrado != "Ano Completo" else mes_atual_nome
-        mes_pago_alvo = f"{mes_alvo} - Pago"
-        
-        df_metric = df_completo_atualizado[["Tipo", mes_alvo, mes_pago_alvo]]
-        
-        # CORREÇÃO: Filtra diretamente a coluna mes_alvo para a soma
-        total_receita = df_metric[(df_metric["Tipo"] == "Receita") & (df_metric[mes_pago_alvo])][mes_alvo].sum()
-        total_not_receita = df_metric[(df_metric["Tipo"] != "Receita") & (df_metric[mes_pago_alvo])][mes_alvo].sum()
-        total_saldo = total_receita - total_not_receita
-        
-        st.metric(label=f"{mes_alvo}: Saldo Atual", value=f"R$ {total_saldo:,.2f}")
+            df_metric = df_completo_atualizado[["Tipo", mes_alvo, mes_pago_alvo]]
+            
+            # CORREÇÃO: Filtra diretamente a coluna mes_alvo para a soma
+            total_receita = df_metric[(df_metric["Tipo"] == "Receita") & (df_metric[mes_pago_alvo])][mes_alvo].sum()
+            total_not_receita = df_metric[(df_metric["Tipo"] != "Receita") & (df_metric[mes_pago_alvo])][mes_alvo].sum()
+            total_saldo = total_receita - total_not_receita
+            
+            st.metric(label=f"{mes_alvo}: Saldo Atual", value=f"R$ {total_saldo:,.2f}")
     
-    with col_metric_previsto:
-        colunas_base = ['Item', 'Tipo', 'Categoria']
-        if mes_filtrado == "Ano Completo":
-            colunas_para_exibir = list(df_ordenado.columns)
-        else:
-            colunas_para_exibir = colunas_base + [mes_filtrado, f"{mes_filtrado} - Pago"]
+        with col_metric_previsto:
+            colunas_base = ['Item', 'Tipo', 'Categoria']
+            if mes_filtrado == "Ano Completo":
+                colunas_para_exibir = list(df_ordenado.columns)
+            else:
+                colunas_para_exibir = colunas_base + [mes_filtrado, f"{mes_filtrado} - Pago"]
+                
+            mes_alvo = mes_filtrado if mes_filtrado != "Ano Completo" else mes_atual_nome
+            mes_pago_alvo = f"{mes_alvo} - Pago"
             
-        mes_alvo = mes_filtrado if mes_filtrado != "Ano Completo" else mes_atual_nome
-        mes_pago_alvo = f"{mes_alvo} - Pago"
-        
-        df_metric = df_completo_atualizado[["Tipo", mes_alvo, mes_pago_alvo]]
-        
-        # CORREÇÃO: Filtra diretamente a coluna mes_alvo para a soma projetada
-        total_receita = df_metric[df_metric["Tipo"] == "Receita"][mes_alvo].sum()
-        total_not_receita = df_metric[df_metric["Tipo"] != "Receita"][mes_alvo].sum()
-        total_saldo = total_receita - total_not_receita
-        
-        st.metric(label=f"{mes_alvo}: Saldo Projetado", value=f"R$ {total_saldo:,.2f}")
+            df_metric = df_completo_atualizado[["Tipo", mes_alvo, mes_pago_alvo]]
+            
+            # CORREÇÃO: Filtra diretamente a coluna mes_alvo para a soma projetada
+            total_receita = df_metric[df_metric["Tipo"] == "Receita"][mes_alvo].sum()
+            total_not_receita = df_metric[df_metric["Tipo"] != "Receita"][mes_alvo].sum()
+            total_saldo = total_receita - total_not_receita
+            
+            st.metric(label=f"{mes_alvo}: Saldo Projetado", value=f"R$ {total_saldo:,.2f}")
         
     colunas_base = ['Item', 'Tipo', 'Categoria']
     if mes_filtrado == "Ano Completo":
@@ -259,7 +309,21 @@ def main():
             column_config=config_colunas
         )
 
-        if st.button(f"Salvar Dados de {ano_selecionado}", type="primary"):
+        col_btn_propagar, col_btn_salvar = st.columns(2)
+
+        with col_btn_propagar:
+            if mes_filtrado != "Ano Completo":
+                if st.button("✨ Preencher meses seguintes", type="secondary", use_container_width=True):
+                    df_propagado = propagar_valores_meses_seguintes(df_completo_atualizado, mes_filtrado)
+                    st.session_state.df_pivotado = df_propagado
+                    if "df_editor_compras" in st.session_state:
+                        del st.session_state["df_editor_compras"]
+                    st.rerun()
+
+        with col_btn_salvar:
+            salvar = st.button(f"Salvar Dados de {ano_selecionado}", type="primary", use_container_width=True)
+
+        if salvar:
             # Processamento para salvar no CSV despivotado
             colunas_meses_puras = [MESES_MAPA[i] for i in range(1, 13)]
             linhas_despivotiadas = []
