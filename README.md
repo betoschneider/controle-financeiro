@@ -5,6 +5,7 @@ Aplicação Streamlit para gerenciar lançamentos financeiros mensais por ano.
 
 ## Funcionalidades
 
+- **Autenticação Simples**: Acesso restrito via modal (`st.dialog`) solicitando um token. O token é configurado na variável `ACCESS_TOKEN` no arquivo `.env` e validado de forma segura contra timing attacks.
 - **Editor interativo** para adicionar, editar e remover lançamentos com `st.data_editor`.
 - **Carregamento automático** de CSVs por ano em `./csv/{ANO}.csv` (formato despivotado: uma linha por mês/lançamento).
 - **Marcação de lançamentos como `Pago`** por mês (checkbox por célula).
@@ -22,11 +23,24 @@ Aplicação Streamlit para gerenciar lançamentos financeiros mensais por ano.
 
 O projeto usa `pyproject.toml` para declarar dependências e `uv.lock` para travar versões. Não é necessário `pip` ou `requirements.txt`.
 
+## Configuração
+
+Antes de executar o projeto, copie o arquivo `.env.example` para `.env` e defina seu token de acesso:
+
+```bash
+cp .env.example .env
+```
+
+Edite o arquivo `.env` e configure o token desejado:
+```env
+ACCESS_TOKEN=seuTokenAqui
+```
+
 ## Executando
 
 ### Docker Compose (recomendado)
 
-Construa e rode o container:
+Construa e rode o container (o arquivo `.env` será montado automaticamente):
 
 ```bash
 docker compose up --build
@@ -66,9 +80,11 @@ Data,Item,Tipo,Categoria,Valor,Pago
 
 | Arquivo | Descrição |
 |---|---|
-| `main.py` | Interface Streamlit, lógica de carregamento/pivot/despivot, propagação de valores e gráficos. |
+| `main.py` | Interface Streamlit, lógica de carregamento/pivot/despivot, propagação de valores, tela de autenticação e gráficos. |
 | `pyproject.toml` | Declaração de dependências e metadados do projeto. |
 | `uv.lock` | Lock file com versões exatas das dependências. |
 | `Dockerfile` | Imagem baseada em `python:3.12-slim` com `uv` para sincronizar dependências e expor a aplicação na porta 8503. |
 | `docker-compose.yml` | Serviço `carteira-investimento` com volumes para `.env`, `csv/` e config do Streamlit. |
 | `csv/` | Diretório com os arquivos CSV por ano (ignorado pelo `.gitignore`). |
+| `.env` | Arquivo contendo variáveis de ambiente locais, como `ACCESS_TOKEN` (ignorado pelo `.gitignore`). |
+

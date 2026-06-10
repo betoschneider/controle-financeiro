@@ -16,6 +16,13 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 import locale
+import os
+import hmac
+from dotenv import load_dotenv
+
+# Carrega variáveis de ambiente do arquivo .env
+load_dotenv()
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "")
 
 # Tenta configurar localidade para formatação de datas em português do Brasil.
 try:
@@ -179,8 +186,31 @@ def propagar_valores_meses_seguintes(df, mes_origem):
 
     return df_resultado
 
+@st.dialog("🔐 Autenticação")
+def dialog_autenticacao():
+    """Diálogo modal para autenticação via token de acesso.
+
+    Compara o token informado com ACCESS_TOKEN do .env usando
+    comparação segura (hmac.compare_digest) para evitar timing attacks.
+    Seta `st.session_state.autenticado = True` se o token for válido.
+    """
+    st.markdown("Informe o token de acesso para continuar.")
+    token_input = st.text_input("Token:", type="password", key="token_input")
+    if st.button("Entrar", type="primary", use_container_width=True):
+        if token_input and hmac.compare_digest(token_input, ACCESS_TOKEN):
+            st.session_state.autenticado = True
+            st.rerun()
+        else:
+            st.error("Token inválido!")
+
 def main():
     st.set_page_config(page_title="Controle Financeiro", page_icon="📊", layout="wide")
+
+    # Verifica autenticação antes de renderizar a aplicação
+    if not st.session_state.get("autenticado", False):
+        dialog_autenticacao()
+        st.stop()
+
     st.title("Controle Financeiro")
 
     col_ano, col_mes, col_vazio, col_metrics = st.columns(4)
