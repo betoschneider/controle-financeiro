@@ -1,5 +1,5 @@
 services:
-  carteira-investimento:
+  controle-financeiro:
     build: .
     dns:
       - 8.8.8.8
