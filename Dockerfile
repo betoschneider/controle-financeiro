@@ -18,7 +18,7 @@ RUN uv sync --frozen --no-install-project --no-dev
 COPY . .
 
 # Expor porta
-EXPOSE 8503
+EXPOSE 8520
 
 # Comando para executar
-CMD ["uv", "run", "streamlit", "run", "main.py", "--server.port=8503", "--server.address=0.0.0.0"]
+CMD ["uv", "run", "streamlit", "run", "main.py", "--server.port=8520", "--server.address=0.0.0.0"]
