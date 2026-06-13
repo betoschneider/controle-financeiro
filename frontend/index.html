@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle Financeiro 📊</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Overlay de Loading -->
+    <div id="loading-overlay" class="overlay hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Modal de Autenticação -->
+    <div id="auth-modal" class="modal-overlay">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-lock"></i> Autenticação</h2>
+            </div>
+            <div class="modal-body">
+                <p>Informe o token de acesso para continuar.</p>
+                <div class="input-group">
+                    <label for="token-input">Token de Acesso</label>
+                    <input type="password" id="token-input" placeholder="Digite o token...">
+                </div>
+                <div id="auth-error" class="error-msg hidden">Token inválido! Tente novamente.</div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-login" class="btn btn-primary btn-block">Entrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header glass">
+            <div class="header-logo">
+                <i class="fa-solid fa-chart-line logo-icon"></i>
+                <h1>Controle Financeiro</h1>
+            </div>
+            <div class="header-controls">
+                <div class="control-group">
+                    <label for="select-ano">Ano:</label>
+                    <select id="select-ano" class="custom-select"></select>
+                </div>
+                <div class="control-group">
+                    <label for="select-mes">Filtrar Visão:</label>
+                    <select id="select-mes" class="custom-select">
+                        <option value="Ano Completo">Ano Completo</option>
+                        <option value="Jan">Jan</option>
+                        <option value="Fev">Fev</option>
+                        <option value="Mar">Mar</option>
+                        <option value="Abr">Abr</option>
+                        <option value="Mai">Mai</option>
+                        <option value="Jun">Jun</option>
+                        <option value="Jul">Jul</option>
+                        <option value="Ago">Ago</option>
+                        <option value="Set">Set</option>
+                        <option value="Out">Out</option>
+                        <option value="Nov">Nov</option>
+                        <option value="Dez">Dez</option>
+                    </select>
+                </div>
+                <button id="btn-logout" class="btn btn-danger-outline" title="Sair"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </header>
+
+        <!-- Dashboard Metrics -->
+        <section class="metrics-grid">
+            <div class="metric-card glass" id="card-saldo-atual">
+                <div class="metric-icon income"><i class="fa-solid fa-wallet"></i></div>
+                <div class="metric-info">
+                    <span class="metric-label" id="label-saldo-atual">Saldo Atual</span>
+                    <h2 class="metric-value" id="val-saldo-atual">R$ 0,00</h2>
+                </div>
+            </div>
+            <div class="metric-card glass" id="card-saldo-projetado">
+                <div class="metric-icon projection"><i class="fa-solid fa-calculator"></i></div>
+                <div class="metric-info">
+                    <span class="metric-label" id="label-saldo-projetado">Saldo Projetado</span>
+                    <h2 class="metric-value" id="val-saldo-projetado">R$ 0,00</h2>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tabs Navigation -->
+        <div class="tabs-container">
+            <div class="tabs-header glass">
+                <button class="tab-btn active" data-tab="tab-editar">
+                    <i class="fa-solid fa-pen-to-square"></i> Editar Lançamentos
+                </button>
+                <button class="tab-btn" data-tab="tab-visualizar">
+                    <i class="fa-solid fa-palette"></i> Visualização Colorida
+                </button>
+            </div>
+
+            <!-- Tab: Editar Lançamentos -->
+            <div id="tab-editar" class="tab-content active">
+                <div class="table-actions glass">
+                    <div class="left-actions">
+                        <button id="btn-adicionar-linha" class="btn btn-secondary">
+                            <i class="fa-solid fa-plus"></i> Adicionar Lançamento
+                        </button>
+                        <button id="btn-propagar" class="btn btn-info hidden">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Preencher meses seguintes
+                        </button>
+                    </div>
+                    <div class="right-actions">
+                        <button id="btn-salvar" class="btn btn-primary">
+                            <i class="fa-solid fa-floppy-disk"></i> Salvar Dados
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-container glass">
+                    <table id="tabela-edicao" class="interactive-table">
+                        <thead>
+                            <!-- Gerado dinamicamente via JS -->
+                        </thead>
+                        <tbody>
+                            <!-- Gerado dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab: Visualização Colorida -->
+            <div id="tab-visualizar" class="tab-content">
+                <div class="table-container glass">
+                    <table id="tabela-visualizacao" class="colorized-table">
+                        <thead>
+                            <!-- Gerado dinamicamente via JS -->
+                        </thead>
+                        <tbody>
+                            <!-- Gerado dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <section class="charts-section">
+            <div class="chart-card glass main-chart-card">
+                <h3><i class="fa-solid fa-chart-column"></i> Evolução Mensal de Lançamentos</h3>
+                <div class="chart-container">
+                    <canvas id="chart-mensal"></canvas>
+                </div>
+            </div>
+
+            <div class="detalhamento-header glass">
+                <h3><i class="fa-solid fa-magnifying-glass-dollar"></i> Detalhamento Econômico</h3>
+                <div class="detalhamento-controls">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="check-apenas-pagos" checked>
+                        <span class="checkmark"></span>
+                        Filtrar apenas valores efetivados
+                    </label>
+                    <div class="control-group">
+                        <label for="select-tipo-detalhe">Explodir Tipo:</label>
+                        <select id="select-tipo-detalhe" class="custom-select">
+                            <!-- Preenchido via JS -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="details-charts-grid">
+                <div class="chart-card glass">
+                    <h4><i class="fa-solid fa-chart-pie"></i> Proporção por Categoria</h4>
+                    <div class="chart-container">
+                        <canvas id="chart-rosca"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card glass">
+                    <h4><i class="fa-solid fa-chart-bar"></i> Ranking de Itens</h4>
+                    <div class="chart-container">
+                        <canvas id="chart-barras-h"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Scripts da Aplicação -->
+    <script src="js/charts.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
