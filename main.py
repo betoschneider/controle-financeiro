@@ -509,7 +509,103 @@ def main():
             margin=dict(l=20, r=20, t=40, b=20), 
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
+        # ... (Mantém o código do seu gráfico mensal atual intacto) ...
         st.plotly_chart(fig, use_container_width=True)
+        
+        # --- NOVA SEÇÃO: DETALHAMENTO (Tipo > Categoria > Item) ---
+        st.markdown("---")
+        st.subheader(f"🔍 Detalhamento Econômico: {mes_filtrado} ({ano_selecionado})")
+        
+        # Checkbox para filtrar apenas os lançamentos efetivados (pagos)
+        apenas_pagos = st.checkbox("Filtrar apenas valores efetivados", value=True)
+        
+        # Prepara a base filtrada pelo mês selecionado para os novos gráficos
+        dados_detalhe = []
+        mes_alvo_filtro = mes_atual_nome if mes_filtrado == "Ano Completo" else mes_filtrado
+        
+        for _, row in df_completo_atualizado.iterrows():
+            tipo_bruto = str(row['Tipo']).strip().capitalize()
+            categoria_bruta = str(row['Categoria']).strip()
+            item_bruto = str(row['Item']).strip()
+            
+            if tipo_bruto in ["", "None", "nan", "NaN"]: continue
+            
+            # Se for Ano Completo, varremos mês a mês aplicando o filtro do Checkbox individualmente
+            if mes_filtrado == "Ano Completo":
+                valor = 0.0
+                for m in colunas_meses_puras:
+                    pago_no_mes = bool(row.get(f"{m} - Pago", False))
+                    # Se o checkbox estiver marcado, ignora o valor caso não esteja pago
+                    if apenas_pagos and not pago_no_mes:
+                        continue
+                    valor += float(row.get(m, 0.0))
+            else:
+                # Se for mês específico, validamos a flag correspondente daquele mês
+                pago_no_mes = bool(row.get(f"{mes_filtrado} - Pago", False))
+                if apenas_pagos and not pago_no_mes:
+                    valor = 0.0
+                else:
+                    valor = float(row.get(mes_filtrado, 0.0))
+                
+            if valor > 0:
+                dados_detalhe.append({
+                    'Tipo': tipo_bruto,
+                    'Categoria': categoria_bruta if categoria_bruta else "Sem Categoria",
+                    'Item': item_bruto if item_bruto else "Sem Item",
+                    'Valor': valor
+                })
+                
+        df_detalhe_base = pd.DataFrame(dados_detalhe)
+        
+        if not df_detalhe_base.empty:
+            # Filtro interativo para explodir o Tipo
+            tipos_disponiveis = df_detalhe_base['Tipo'].unique()
+            tipo_selecionado = st.selectbox("Selecione o Tipo para explodir:", options=tipos_disponiveis)
+            
+            # Filtra os dados pelo tipo escolhido
+            df_filtrado_tipo = df_detalhe_base[df_detalhe_base['Tipo'] == tipo_selecionado]
+            
+            col_graf1, col_graf2 = st.columns(2)
+            
+            with col_graf1:
+                st.markdown(f"**Proporção por Categoria em {tipo_selecionado}**")
+                df_cat = df_filtrado_tipo.groupby('Categoria')['Valor'].sum().reset_index()
+                
+                fig_rosca = go.Figure(data=[go.Pie(
+                    labels=df_cat['Categoria'],
+                    values=df_cat['Valor'],
+                    hole=.4,
+                    textinfo='percent+value',
+                    insidetextorientation='radial',
+                    marker=dict(colors=[f"rgba({obter_cor_tipo(tipo_selecionado)[0]}, {obter_cor_tipo(tipo_selecionado)[1]}, {obter_cor_tipo(tipo_selecionado)[2]}, {1 - (idx*0.15)})" for idx in range(len(df_cat))])
+                )])
+                fig_rosca.update_layout(
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5)
+                )
+                st.plotly_chart(fig_rosca, use_container_width=True)
+                
+            with col_graf2:
+                st.markdown(f"**Ranking de Itens ({tipo_selecionado})**")
+                df_item = df_filtrado_tipo.groupby('Item')['Valor'].sum().reset_index()
+                df_item = df_item.sort_values(by='Valor', ascending=True) # Ascending True para o gráfico horizontal listar o maior no topo
+                
+                rgb_cor = obter_cor_tipo(tipo_selecionado)
+                fig_barras_h = go.Figure(go.Bar(
+                    x=df_item['Valor'],
+                    y=df_item['Item'],
+                    orientation='h',
+                    marker_color=f"rgb({rgb_cor[0]}, {rgb_cor[1]}, {rgb_cor[2]})"
+                ))
+                fig_barras_h.update_layout(
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    xaxis=dict(tickformat=".2f"),
+                    hovermode="y unified"
+                )
+                st.plotly_chart(fig_barras_h, use_container_width=True)
+        else:
+            st.info("Sem dados complementares para exibir o detalhamento neste período ou com os filtros selecionados.")
+            
     else:
         st.info("Insira dados válidos no editor para renderizar o gráfico descritivo.")
 
