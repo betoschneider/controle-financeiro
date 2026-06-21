@@ -3,18 +3,35 @@ from sqlalchemy import func
 from . import models, schemas
 from typing import List, Optional
 
-def get_transacoes_por_ano(db: Session, ano: int) -> List[models.Transacao]:
-    """Retorna todas as transações de um ano específico."""
-    return db.query(models.Transacao).filter(models.Transacao.ano == ano).all()
+def get_transacoes_por_ano(db: Session, ano: int, username: Optional[str]) -> List[models.Transacao]:
+    """Retorna todas as transações de um ano específico para o usuário fornecido."""
+    if not username:
+        return []
+    user = get_user_by_username(db, username)
+    if not user:
+        return []
+    return db.query(models.Transacao).filter(
+        models.Transacao.ano == ano,
+        models.Transacao.owner_id == user.id
+    ).all()
 
 def bulk_save_transacoes_por_ano(
-    db: Session, ano: int, transacoes_in: List[schemas.TransacaoCreate]
+    db: Session, ano: int, transacoes_in: List[schemas.TransacaoCreate], username: Optional[str]
 ) -> List[models.Transacao]:
-    """Deleta todas as transações do ano fornecido e insere a nova lista."""
-    # 1. Remove transações antigas para aquele ano
-    db.query(models.Transacao).filter(models.Transacao.ano == ano).delete()
+    """Deleta todas as transações do ano fornecido para o usuário e insere a nova lista."""
+    if not username:
+        return []
+    user = get_user_by_username(db, username)
+    if not user:
+        return []
+
+    # 1. Remove transações antigas para aquele ano e usuário
+    db.query(models.Transacao).filter(
+        models.Transacao.ano == ano,
+        models.Transacao.owner_id == user.id
+    ).delete()
     
-    # 2. Insere as novas transações
+    # 2. Insere as novas transações atribuídas ao usuário
     novas_transacoes = []
     for tx in transacoes_in:
         # Só insere se pelo menos um dos campos (item, tipo, categoria) estiver preenchido
@@ -26,7 +43,8 @@ def bulk_save_transacoes_por_ano(
                 tipo=tx.tipo.strip(),
                 categoria=tx.categoria.strip(),
                 valor=tx.valor,
-                pago=tx.pago
+                pago=tx.pago,
+                owner_id=user.id
             )
             novas_transacoes.append(db_tx)
             
@@ -34,17 +52,28 @@ def bulk_save_transacoes_por_ano(
     db.commit()
     return novas_transacoes
 
-def get_ano_mais_recente(db: Session) -> Optional[int]:
-    """Retorna o ano mais recente que possui registros no banco de dados."""
-    resultado = db.query(func.max(models.Transacao.ano)).scalar()
+def get_ano_mais_recente(db: Session, username: Optional[str]) -> Optional[int]:
+    """Retorna o ano mais recente que possui registros no banco de dados para o usuário."""
+    if not username:
+        return None
+    user = get_user_by_username(db, username)
+    if not user:
+        return None
+    resultado = db.query(func.max(models.Transacao.ano)).filter(models.Transacao.owner_id == user.id).scalar()
     return resultado
 
-def get_dados_molde_ano_mais_recente(db: Session) -> List[models.Transacao]:
-    """Busca transações do ano mais recente cadastrado para servir de molde para anos futuros."""
-    ano_recente = get_ano_mais_recente(db)
+def get_dados_molde_ano_mais_recente(db: Session, username: Optional[str]) -> List[models.Transacao]:
+    """Busca transações do ano mais recente cadastrado para servir de molde para anos futuros (por usuário)."""
+    ano_recente = get_ano_mais_recente(db, username)
     if not ano_recente:
         return []
-    return db.query(models.Transacao).filter(models.Transacao.ano == ano_recente).all()
+    user = get_user_by_username(db, username)
+    if not user:
+        return []
+    return db.query(models.Transacao).filter(
+        models.Transacao.ano == ano_recente,
+        models.Transacao.owner_id == user.id
+    ).all()
 
 # --- OPERAÇÕES DE USUÁRIO (AUTENTICAÇÃO & 2FA) ---
 import bcrypt

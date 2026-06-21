@@ -65,10 +65,10 @@ uv run alembic upgrade head
 
 Inicie o servidor de desenvolvimento do FastAPI (o frontend é servido como arquivos estáticos a partir da rota raiz):
 ```bash
-uv run uvicorn backend.app.main:app --reload
+uv run uvicorn backend.app.main:app --reload --port 8520
 ```
 
-Acesse o sistema no seu navegador em: **`http://127.0.0.1:8000`**.
+Acesse o sistema no seu navegador em: **`http://127.0.0.1:8520`**.
 
 Ao acessar pela primeira vez, utilize o link **"Criar Conta"** na tela de login para registrar o seu usuário inicial e configurar o seu Google Authenticator.
 

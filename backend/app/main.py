@@ -164,13 +164,13 @@ def listar_transacoes(
     mas NÃO salva no banco automaticamente (apenas retorna para exibição).
     Se não houver molde disponível no banco, retorna 12 transações zeradas (uma para cada mês).
     """
-    transacoes = crud.get_transacoes_por_ano(db, ano)
+    transacoes = crud.get_transacoes_por_ano(db, ano, _token)
     
     # Se não houver transações e for o ano atual ou futuro
     ano_atual_sistema = datetime.now().year
     if not transacoes and ano >= ano_atual_sistema:
         # Busca molde do ano mais recente
-        molde_original = crud.get_dados_molde_ano_mais_recente(db)
+        molde_original = crud.get_dados_molde_ano_mais_recente(db, _token)
         if molde_original:
             # Filtra o molde agrupando por item, tipo, categoria para evitar duplicidades caso existam
             # E retorna as transações com o ano atualizado e pago=False (e ID dummy menor que 0)
@@ -217,7 +217,7 @@ def salvar_transacoes(
     _token: str = Depends(verificar_autenticacao)
 ):
     """Deleta todas as transações daquele ano e salva a nova lista editada pelo usuário."""
-    return crud.bulk_save_transacoes_por_ano(db, ano, transacoes)
+    return crud.bulk_save_transacoes_por_ano(db, ano, transacoes, _token)
 
 @app.get("/api/transacoes/download")
 def download_csv(
@@ -230,13 +230,16 @@ def download_csv(
     from fastapi.responses import StreamingResponse
     
     # Busca todas as transações, ordenadas por ano, mes, tipo, categoria, item
-    transacoes = db.query(models.Transacao).order_by(
+    user = crud.get_user_by_username(db, _username)
+    transacoes = []
+    if user:
+        transacoes = db.query(models.Transacao).filter(models.Transacao.owner_id == user.id).order_by(
         models.Transacao.ano.desc(),
         models.Transacao.mes.asc(),
         models.Transacao.tipo,
         models.Transacao.categoria,
         models.Transacao.item
-    ).all()
+        ).all()
     
     stream = io.StringIO()
     writer = csv.writer(stream)
@@ -335,8 +338,13 @@ def upload_csv(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao processar CSV: {str(e)}")
         
-    db.query(models.Transacao).delete()
-    db.add_all(novas_transacoes)
+    # Remove apenas transações do usuário autenticado e atribui owner_id nas novas
+    user = crud.get_user_by_username(db, _username)
+    if user:
+        db.query(models.Transacao).filter(models.Transacao.owner_id == user.id).delete()
+        for tx in novas_transacoes:
+            tx.owner_id = user.id
+        db.add_all(novas_transacoes)
     db.commit()
     
     return {"success": True, "count": len(novas_transacoes), "message": f"{len(novas_transacoes)} lançamentos importados com sucesso."}
