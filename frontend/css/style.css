@@ -561,45 +561,66 @@ th {
     background-color: rgba(255, 71, 87, 0.1);
 }
 
-/* Colorized Table (View Mode) */
-.colorized-table tbody tr {
+/* Linhas Coloridas por Tipo (Tabela de Edição e Visualização) */
+.colorized-table tbody tr,
+.interactive-table tbody tr {
     transition: var(--transition-fast);
 }
 
 .row-receita {
     background-color: rgba(46, 204, 113, 0.12);
 }
-
-.row-receita td {
-    color: #e2fbe9;
+.row-receita td,
+.row-receita .cell-input,
+.row-receita .cell-select {
+    color: #c8f5d8;
 }
 
 .row-despesa {
     background-color: rgba(231, 76, 60, 0.12);
 }
-
-.row-despesa td {
-    color: #fde8e7;
+.row-despesa td,
+.row-despesa .cell-input,
+.row-despesa .cell-select {
+    color: #fbd4d1;
 }
 
 .row-investimento {
     background-color: rgba(52, 152, 219, 0.12);
 }
-
-.row-investimento td {
-    color: #eaf6fd;
+.row-investimento td,
+.row-investimento .cell-input,
+.row-investimento .cell-select {
+    color: #c8e8f9;
 }
 
 .row-reserva {
     background-color: rgba(241, 196, 15, 0.12);
 }
-
-.row-reserva td {
-    color: #fffde6;
+.row-reserva td,
+.row-reserva .cell-input,
+.row-reserva .cell-select {
+    color: #fdf5c0;
 }
 
 .row-padrao {
     background-color: transparent;
+}
+
+/* No tema claro, as linhas coloridas usam texto escúro do próprio tema */
+body.light-theme .row-receita td,
+body.light-theme .row-receita .cell-input,
+body.light-theme .row-receita .cell-select,
+body.light-theme .row-despesa td,
+body.light-theme .row-despesa .cell-input,
+body.light-theme .row-despesa .cell-select,
+body.light-theme .row-investimento td,
+body.light-theme .row-investimento .cell-input,
+body.light-theme .row-investimento .cell-select,
+body.light-theme .row-reserva td,
+body.light-theme .row-reserva .cell-input,
+body.light-theme .row-reserva .cell-select {
+    color: var(--text-primary);
 }
 
 /* Charts Section */

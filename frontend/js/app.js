@@ -643,10 +643,9 @@ function atualizarFiltroCategoriaOpcoes() {
     }
 }
 
-// Renderiza ambas as tabelas (Edição e Visualização Colorida)
+// Renderiza a tabela de lançamentos
 function renderizarTabelas() {
     renderizarTabelaEdicao();
-    renderizarTabelaVisualizacao();
 }
 
 // Renderiza a Tabela Interativa de Edição
@@ -745,6 +744,14 @@ function renderizarTabelaEdicao() {
         
         const tr = document.createElement("tr");
 
+        // Aplica classe de cor baseada no Tipo (igual à visualização colorida)
+        const tipoLimpo = row.tipo.trim().toLowerCase();
+        if (tipoLimpo === "receita") tr.className = "row-receita";
+        else if (tipoLimpo === "despesa") tr.className = "row-despesa";
+        else if (tipoLimpo === "investimento") tr.className = "row-investimento";
+        else if (tipoLimpo === "reserva") tr.className = "row-reserva";
+        else tr.className = "row-padrao";
+
         // Botão Deletar
         const tdDel = document.createElement("td");
         tdDel.style.textAlign = "center";
@@ -834,139 +841,6 @@ function renderizarTabelaEdicao() {
                 atualizarGraficos();
             });
             tdPago.appendChild(inputPago);
-            tr.appendChild(tdPago);
-        });
-
-        tbody.appendChild(tr);
-    });
-}
-
-// Renderiza a Tabela de Visualização Colorida
-function renderizarTabelaVisualizacao() {
-    const tabela = document.getElementById("tabela-visualizacao");
-    const thead = tabela.querySelector("thead");
-    const tbody = tabela.querySelector("tbody");
-    
-    thead.innerHTML = "";
-    tbody.innerHTML = "";
-
-    // 1. Cria Cabeçalho
-    const headerRow = document.createElement("tr");
-    
-    const thItem = document.createElement("th");
-    thItem.textContent = "Item";
-    headerRow.appendChild(thItem);
-
-    const thTipo = document.createElement("th");
-    thTipo.textContent = "Tipo";
-    thTipo.style.width = "130px";
-    headerRow.appendChild(thTipo);
-
-    const thCategoria = document.createElement("th");
-    thCategoria.textContent = "Categoria";
-    headerRow.appendChild(thCategoria);
-
-    // Colunas de meses filtrados
-    const mesesAExibir = mesFiltrado === "Ano Completo" ? LISTA_MESES : [mesFiltrado];
-    mesesAExibir.forEach(mes => {
-        const thMesVal = document.createElement("th");
-        thMesVal.textContent = mes;
-        thMesVal.style.textAlign = "right";
-        thMesVal.style.width = "110px";
-        headerRow.appendChild(thMesVal);
-
-        const thMesPago = document.createElement("th");
-        thMesPago.textContent = `${mes} - Pago`;
-        thMesPago.style.textAlign = "center";
-        thMesPago.style.width = "95px";
-        headerRow.appendChild(thMesPago);
-    });
-
-    thead.appendChild(headerRow);
-
-    // Ordenação idêntica ao original
-    const mesAtualNome = MESES_MAPA[new Date().getMonth() + 1];
-    const mesOrdenacao = mesFiltrado === "Ano Completo" ? mesAtualNome : mesFiltrado;
-    const numMesOrdenacao = MAPA_REVERSO_MES[mesOrdenacao];
-
-    const dadosOrdenados = [...dadosPivotados].sort((a, b) => {
-        const prioridadeTipo = { "Receita": 4, "Despesa": 3, "Investimento": 2, "Reserva": 1 };
-        const pA = prioridadeTipo[a.tipo] || 0;
-        const pB = prioridadeTipo[b.tipo] || 0;
-        if (pA !== pB) return pB - pA;
-
-        const pagoA = a.meses[numMesOrdenacao]?.pago ? 1 : 0;
-        const pagoB = b.meses[numMesOrdenacao]?.pago ? 1 : 0;
-        if (pagoA !== pagoB) return pagoA - pagoB;
-
-        const valA = a.meses[numMesOrdenacao]?.valor || 0;
-        const valB = b.meses[numMesOrdenacao]?.valor || 0;
-        if (valA !== valB) return valB - valA;
-
-        const catA = a.categoria || "";
-        const catB = b.categoria || "";
-        if (catA !== catB) return catB.localeCompare(catA);
-
-        const itemA = a.item || "";
-        const itemB = b.item || "";
-        return itemA.localeCompare(itemB);
-    });
-
-    const dadosFiltrados = dadosOrdenados.filter(row => {
-        const matchTipo = filtroTipoAtivo === "Todos" || row.tipo === filtroTipoAtivo;
-        const matchCategoria = filtroCategoriaAtiva === "Todas" || row.categoria === filtroCategoriaAtiva;
-        return matchTipo && matchCategoria;
-    });
-
-    // 2. Preenche o corpo (Colorido)
-    dadosFiltrados.forEach(row => {
-        const tr = document.createElement("tr");
-        
-        // Aplica classe de cor baseado no Tipo
-        const tipoLimpo = row.tipo.trim().toLowerCase();
-        if (tipoLimpo === "receita") tr.className = "row-receita";
-        else if (tipoLimpo === "despesa") tr.className = "row-despesa";
-        else if (tipoLimpo === "investimento") tr.className = "row-investimento";
-        else if (tipoLimpo === "reserva") tr.className = "row-reserva";
-        else tr.className = "row-padrao";
-
-        // Células estáticas
-        const tdItem = document.createElement("td");
-        tdItem.textContent = row.item || "-";
-        tr.appendChild(tdItem);
-
-        const tdTipo = document.createElement("td");
-        tdTipo.textContent = row.tipo || "-";
-        tr.appendChild(tdTipo);
-
-        const tdCat = document.createElement("td");
-        tdCat.textContent = row.categoria || "-";
-        tr.appendChild(tdCat);
-
-        // Valores e Status dos meses
-        mesesAExibir.forEach(mes => {
-            const numMes = MAPA_REVERSO_MES[mes];
-            const dadosMes = row.meses[numMes] || { valor: 0.0, pago: false };
-
-            // Valor formatado em R$
-            const tdVal = document.createElement("td");
-            tdVal.style.textAlign = "right";
-            tdVal.style.fontWeight = "500";
-            tdVal.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dadosMes.valor);
-            tr.appendChild(tdVal);
-
-            // Checkbox estático (Apenas leitura)
-            const tdPago = document.createElement("td");
-            tdPago.style.textAlign = "center";
-            const iconCheck = document.createElement("i");
-            if (dadosMes.pago) {
-                iconCheck.className = "fa-solid fa-circle-check";
-                iconCheck.style.color = "var(--color-receita)";
-            } else {
-                iconCheck.className = "fa-solid fa-circle-minus";
-                iconCheck.style.color = "var(--text-muted)";
-            }
-            tdPago.appendChild(iconCheck);
             tr.appendChild(tdPago);
         });
 

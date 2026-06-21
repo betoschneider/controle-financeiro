@@ -1,14 +1,14 @@
-version: '3.8'
-
 services:
   app:
     build: .
     container_name: controle_financeiro_app
     ports:
-      - "8000:8000"
-    # Carrega variáveis de ambiente do arquivo .env na raiz (inclui ACCESS_TOKEN)
-    env_file: .env
+      # Mapeia a porta 8521 do seu host (sua máquina) para a porta 8521 interna do container
+      - "8521:8521"
+    env_file:
+      - .env
     volumes:
-      # Persiste o arquivo SQLite no host (diretório); o arquivo será criado em ./data
-      - ./data:/app
+      # CORREÇÃO: Cria uma pasta de dados dedicada no container (ex: /app/data)
+      # Isso evita que o volume limpe o código fonte que está na raiz (/app)
+      - ./data:/app/data
     restart: unless-stopped
