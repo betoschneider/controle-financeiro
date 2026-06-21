@@ -544,6 +544,22 @@ th {
     accent-color: var(--primary-color);
 }
 
+/* Estilos específicos para a coluna de Pago (checkbox) sem título visível */
+.interactive-table th.th-pago {
+    width: 40px;
+    padding-left: 6px;
+    padding-right: 8px;
+}
+.interactive-table td.td-pago {
+    width: 40px;
+    padding-left: 6px;
+    padding-right: 8px;
+}
+.interactive-table td.td-pago .table-checkbox {
+    margin-left: 0;
+    display: inline-block;
+}
+
 /* Ação de remover linha */
 .btn-delete-row {
     background: transparent;

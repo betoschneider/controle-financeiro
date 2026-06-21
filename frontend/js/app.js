@@ -689,9 +689,12 @@ function renderizarTabelaEdicao() {
         headerRow.appendChild(thMesVal);
 
         const thMesPago = document.createElement("th");
-        thMesPago.textContent = `${mes} - Pago`;
-        thMesPago.style.textAlign = "center";
-        thMesPago.style.width = "85px";
+        // Não exibir título da coluna Pago — cabeçalho intencionalmente vazio
+        thMesPago.textContent = "";
+        thMesPago.className = "th-pago";
+        thMesPago.style.textAlign = "left";
+        thMesPago.style.width = "40px";
+        thMesPago.style.paddingLeft = "6px";
         headerRow.appendChild(thMesPago);
     });
 
@@ -830,7 +833,9 @@ function renderizarTabelaEdicao() {
 
             // Célula Pago (Checkbox)
             const tdPago = document.createElement("td");
-            tdPago.style.textAlign = "center";
+            tdPago.className = "td-pago";
+            tdPago.style.textAlign = "left";
+            tdPago.style.paddingLeft = "6px";
             const inputPago = document.createElement("input");
             inputPago.type = "checkbox";
             inputPago.className = "table-checkbox";
