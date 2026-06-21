@@ -525,6 +525,8 @@ function alternarTema() {
         localStorage.setItem("tema", "claro");
         if (btnTheme) btnTheme.innerHTML = '<i class="fa-solid fa-sun"></i>';
     }
+    // Re-renderiza gráficos para aplicar as cores corretas do novo tema
+    atualizarGraficos();
 }
 
 

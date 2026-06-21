@@ -18,6 +18,39 @@ const CORES_EXTRAS_RGB = [
     [52, 73, 94]     // Grafite
 ];
 
+/**
+ * Retorna a cor de texto primária do tema atual lendo a variável CSS.
+ */
+function corTextoTema() {
+    return getComputedStyle(document.body).getPropertyValue('--text-primary').trim() || '#f1f1f5';
+}
+
+/**
+ * Retorna a cor de texto secundária do tema atual lendo a variável CSS.
+ */
+function corTextoSecundarioTema() {
+    return getComputedStyle(document.body).getPropertyValue('--text-secondary').trim() || '#9090a2';
+}
+
+/**
+ * Gera um array de cores rgba distintas para as categorias da rosca,
+ * mantendo o matiz do tipo (rgb base) e variando a opacidade de forma
+ * bem distribuída entre 0.95 e 0.35 para garantir contraste visual.
+ */
+function gerarCoresCategoriasDistintas(rgbBase, quantidade) {
+    const cores = [];
+    const opMax = 0.95;
+    const opMin = 0.35;
+    for (let i = 0; i < quantidade; i++) {
+        // Distribui uniformemente entre opMax e opMin
+        const opacidade = quantidade === 1
+            ? opMax
+            : opMax - (i * (opMax - opMin) / (quantidade - 1));
+        cores.push(`rgba(${rgbBase[0]}, ${rgbBase[1]}, ${rgbBase[2]}, ${opacidade.toFixed(2)})`);
+    }
+    return cores;
+}
+
 function obterCorTipoRGB(tipoStr, index = 0) {
     const busca = tipoStr.trim().charAt(0).toUpperCase() + tipoStr.trim().slice(1).toLowerCase();
     if (CORES_RGB[busca]) {
@@ -148,7 +181,7 @@ function atualizarGraficoMensal(transacoes, anoSelecionado) {
                 legend: {
                     position: 'top',
                     labels: {
-                        color: '#f1f1f5',
+                        color: corTextoTema(),
                         font: { family: 'Outfit', size: 12 },
                         filter: function(item) {
                             // Oculta previstos da legenda para não poluir
@@ -178,13 +211,13 @@ function atualizarGraficoMensal(transacoes, anoSelecionado) {
             scales: {
                 x: {
                     stacked: true,
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                    ticks: { color: '#9090a2', font: { family: 'Outfit' } }
+                    grid: { color: 'rgba(128, 128, 128, 0.15)' },
+                    ticks: { color: corTextoSecundarioTema(), font: { family: 'Outfit' } }
                 },
                 y: {
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    grid: { color: 'rgba(128, 128, 128, 0.15)' },
                     ticks: {
-                        color: '#9090a2',
+                        color: corTextoSecundarioTema(),
                         font: { family: 'Outfit' },
                         callback: function(value) {
                             return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -275,11 +308,13 @@ function atualizarGraficosDetalhamento(transacoes, tipoSelecionado, apenasPagos,
         return;
     }
 
-    // Gerador de cores em degradê para as categorias da Rosca
-    const backgroundColorsRosca = labelsCategorias.map((_, idx) => {
-        // Reduz a opacidade conforme o índice para dar efeito degradê
-        const opacidade = Math.max(0.2, 1.0 - (idx * 0.15));
-        return `rgba(${rgbBase[0]}, ${rgbBase[1]}, ${rgbBase[2]}, ${opacidade})`;
+    // Gera cores distintas para as categorias da Rosca (rotação de matiz)
+    const backgroundColorsRosca = gerarCoresCategoriasDistintas(rgbBase, labelsCategorias.length);
+
+    // Mapeia cada label de categoria à sua cor (para usar no ranking)
+    const mapaCoresCategorias = {};
+    labelsCategorias.forEach((cat, idx) => {
+        mapaCoresCategorias[cat] = backgroundColorsRosca[idx];
     });
 
     // Renderiza Gráfico Rosca (Pie/Doughnut)
@@ -290,7 +325,7 @@ function atualizarGraficosDetalhamento(transacoes, tipoSelecionado, apenasPagos,
             datasets: [{
                 data: valoresCategorias,
                 backgroundColor: backgroundColorsRosca,
-                borderColor: 'rgba(255,255,255,0.05)',
+                borderColor: 'rgba(128,128,128,0.15)',
                 borderWidth: 1
             }]
         },
@@ -301,7 +336,7 @@ function atualizarGraficosDetalhamento(transacoes, tipoSelecionado, apenasPagos,
                 legend: {
                     position: 'bottom',
                     labels: {
-                        color: '#f1f1f5',
+                        color: corTextoTema(),
                         font: { family: 'Outfit', size: 11 }
                     }
                 },
@@ -318,15 +353,26 @@ function atualizarGraficosDetalhamento(transacoes, tipoSelecionado, apenasPagos,
     });
 
     // Renderiza Gráfico Barras Horizontal
-    const corBarrasH = `rgba(${rgbBase[0]}, ${rgbBase[1]}, ${rgbBase[2]}, 0.85)`;
+    // Para cada item, identifica a categoria correspondente e usa sua cor da rosca
+    const coresBarrasH = labelsItens.map(itemLabel => {
+        // Encontra a categoria do item buscando nas transações filtradas
+        const transacaoDoItem = transacoesFiltradas.find(t => (t.item.trim() || "Sem Nome") === itemLabel);
+        const categoriaDoItem = transacaoDoItem ? (transacaoDoItem.categoria.trim() || "Sem Categoria") : null;
+        if (categoriaDoItem && mapaCoresCategorias[categoriaDoItem]) {
+            return mapaCoresCategorias[categoriaDoItem];
+        }
+        // Fallback: cor do tipo
+        return `rgba(${rgbBase[0]}, ${rgbBase[1]}, ${rgbBase[2]}, 0.85)`;
+    });
+
     chartBarrasHInstancia = new Chart(ctxBarrasH, {
         type: 'bar',
         data: {
             labels: labelsItens,
             datasets: [{
                 data: valoresItens,
-                backgroundColor: corBarrasH,
-                borderColor: `rgba(${rgbBase[0]}, ${rgbBase[1]}, ${rgbBase[2]}, 1.0)`,
+                backgroundColor: coresBarrasH,
+                borderColor: coresBarrasH,
                 borderWidth: 1,
                 borderRadius: 4
             }]
@@ -347,9 +393,9 @@ function atualizarGraficosDetalhamento(transacoes, tipoSelecionado, apenasPagos,
             },
             scales: {
                 x: {
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    grid: { color: 'rgba(128, 128, 128, 0.15)' },
                     ticks: {
-                        color: '#9090a2',
+                        color: corTextoSecundarioTema(),
                         font: { family: 'Outfit' },
                         callback: function(value) {
                             return 'R$ ' + value.toLocaleString('pt-BR');
@@ -358,7 +404,7 @@ function atualizarGraficosDetalhamento(transacoes, tipoSelecionado, apenasPagos,
                 },
                 y: {
                     grid: { display: false },
-                    ticks: { color: '#f1f1f5', font: { family: 'Outfit', size: 12 } }
+                    ticks: { color: corTextoTema(), font: { family: 'Outfit', size: 12 } }
                 }
             }
         }
