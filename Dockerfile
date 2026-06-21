@@ -24,7 +24,7 @@ RUN uv pip install --no-cache -e . 2>/dev/null || uv pip install --no-cache -r p
 COPY . /app
 
 # Nova porta desejada
-EXPOSE 8521
+EXPOSE 8520
 
 # Comando padrão iniciando o Uvicorn na nova porta
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8521"]
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8520"]
