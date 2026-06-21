@@ -14,3 +14,4 @@ wheels/
 
 # Database
 *.db
+controle_financeiro.db
