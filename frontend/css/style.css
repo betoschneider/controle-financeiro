@@ -465,13 +465,24 @@ th {
 /* Proteção para colunas iniciais de texto (Ex: Categoria, Descrição/Nome) */
 .interactive-table th:first-child,
 .interactive-table td:first-child {
-    min-width: 180px;
+    /* Coluna de ações (icones) — mantida pequena e alinhada à esquerda */
+    min-width: 50px;
+    width: 50px;
+    text-align: left;
+    padding-left: 8px;
 }
 
 .interactive-table th:nth-child(2),
 .interactive-table td:nth-child(2) {
     min-width: 260px;
-    /* Dá bastante espaço para a descrição do lançamento */
+    /* Dá bastante espaço para a descrição do lançamento (Item) */
+}
+
+/* Garante espaço legível para a coluna Categoria (4ª coluna) */
+.interactive-table th:nth-child(4),
+.interactive-table td:nth-child(4) {
+    min-width: 220px;
+    max-width: 420px;
 }
 
 /* Proteção para os inputs numéricos de valores de meses nas colunas */

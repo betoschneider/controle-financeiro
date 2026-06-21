@@ -757,7 +757,9 @@ function renderizarTabelaEdicao() {
 
         // Botão Deletar
         const tdDel = document.createElement("td");
-        tdDel.style.textAlign = "center";
+        tdDel.style.textAlign = "left";
+        tdDel.style.width = "50px";
+        tdDel.style.paddingLeft = "6px";
         tdDel.innerHTML = `<button class="btn-delete-row" onclick="excluirLinha(${idxOriginal})" title="Excluir Lançamento"><i class="fa-solid fa-trash-can"></i></button>`;
         tr.appendChild(tdDel);
 
