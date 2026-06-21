@@ -45,3 +45,37 @@ def get_dados_molde_ano_mais_recente(db: Session) -> List[models.Transacao]:
     if not ano_recente:
         return []
     return db.query(models.Transacao).filter(models.Transacao.ano == ano_recente).all()
+
+# --- OPERAÇÕES DE USUÁRIO (AUTENTICAÇÃO & 2FA) ---
+import bcrypt
+import pyotp
+
+def hash_password(password: str) -> str:
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def get_user_by_username(db: Session, username: str) -> Optional[models.User]:
+    return db.query(models.User).filter(models.User.username == username).first()
+
+def create_user(db: Session, user_in: schemas.UserCreate) -> models.User:
+    hashed = hash_password(user_in.password)
+    totp_secret = pyotp.random_base32()
+    db_user = models.User(
+        username=user_in.username.strip(),
+        password_hash=hashed,
+        totp_secret=totp_secret
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def reset_user_password(db: Session, user: models.User, new_password: str) -> models.User:
+    user.password_hash = hash_password(new_password)
+    db.commit()
+    db.refresh(user)
+    return user
+

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
 from .database import Base
 
 class Transacao(Base):
@@ -12,3 +12,14 @@ class Transacao(Base):
     categoria = Column(String, index=True, nullable=False)
     valor = Column(Float, nullable=False, default=0.0)
     pago = Column(Boolean, nullable=False, default=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    totp_secret = Column(String, nullable=False)
+
+

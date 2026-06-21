@@ -11,12 +11,15 @@ const MAPA_REVERSO_MES = {
 
 const LISTA_MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-// Estado Global da SPA
+// // Estado Global da SPA
 let anoAtivo = new Date().getFullYear();
 let mesFiltrado = "Ano Completo";
 let dadosPivotados = []; // Estrutura: [{ item, tipo, categoria, meses: {1: {valor, pago}, 2: ...} }]
 let apenasPagosDetalhe = true;
 let tipoDetalheSelecionado = "Despesa";
+let filtroTipoAtivo = "Todos";
+let filtroCategoriaAtiva = "Todas";
+let currentLoginUsername = "";
 
 // Elementos da Interface
 const selectAno = document.getElementById("select-ano");
@@ -25,19 +28,25 @@ const selectTipoDetalhe = document.getElementById("select-tipo-detalhe");
 const checkApenasPagos = document.getElementById("check-apenas-pagos");
 
 const authModal = document.getElementById("auth-modal");
-const tokenInput = document.getElementById("token-input");
-const authError = document.getElementById("auth-error");
-const btnLogin = document.getElementById("btn-login");
 const btnLogout = document.getElementById("btn-logout");
+const btnThemeToggle = document.getElementById("btn-theme-toggle");
 
 const btnAdicionarLinha = document.getElementById("btn-adicionar-linha");
 const btnPropagar = document.getElementById("btn-propagar");
 const btnSalvar = document.getElementById("btn-salvar");
 
+const btnDownloadCsv = document.getElementById("btn-download-csv");
+const btnUploadTrigger = document.getElementById("btn-upload-trigger");
+const inputUploadCsv = document.getElementById("input-upload-csv");
+
+const filterTipo = document.getElementById("filter-tipo");
+const filterCategoria = document.getElementById("filter-categoria");
+
 const loadingOverlay = document.getElementById("loading-overlay");
 
 // Inicialização
 document.addEventListener("DOMContentLoaded", () => {
+    inicializarTema();
     inicializarSeletores();
     configurarEventListeners();
     verificarAutenticacao();
@@ -63,7 +72,12 @@ function inicializarSeletores() {
 }
 
 function configurarEventListeners() {
-    // Mudança de Filtros
+    // Tema claro/escuro
+    if (btnThemeToggle) {
+        btnThemeToggle.addEventListener("click", alternarTema);
+    }
+
+    // Mudança de Filtros no Cabeçalho
     selectAno.addEventListener("change", (e) => {
         anoAtivo = parseInt(e.target.value);
         carregarDadosDoAno();
@@ -95,16 +109,88 @@ function configurarEventListeners() {
         atualizarGraficos();
     });
 
+    // Filtros Locais da Tabela (Tipo e Categoria)
+    if (filterTipo) {
+        filterTipo.addEventListener("change", (e) => {
+            filtroTipoAtivo = e.target.value;
+            renderizarTabelas();
+        });
+    }
+    if (filterCategoria) {
+        filterCategoria.addEventListener("change", (e) => {
+            filtroCategoriaAtiva = e.target.value;
+            renderizarTabelas();
+        });
+    }
+
+    // Ações de CSV
+    if (btnDownloadCsv) {
+        btnDownloadCsv.addEventListener("click", exportarCSV);
+    }
+    if (btnUploadTrigger && inputUploadCsv) {
+        btnUploadTrigger.addEventListener("click", () => inputUploadCsv.click());
+        inputUploadCsv.addEventListener("change", (e) => {
+            if (e.target.files && e.target.files[0]) {
+                importarCSV(e.target.files[0]);
+            }
+        });
+    }
+
     // Ações de Botões
     btnAdicionarLinha.addEventListener("click", adicionarLinha);
     btnPropagar.addEventListener("click", propagarValores);
     btnSalvar.addEventListener("click", salvarDadosServidor);
 
-    // Login/Logout
-    btnLogin.addEventListener("click", realizarLogin);
-    tokenInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") realizarLogin();
+    // Configuração do Modal de Autenticação - Eventos das Telas
+    document.getElementById("btn-login-next").addEventListener("click", realizarLoginStep1);
+    document.getElementById("login-password").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") realizarLoginStep1();
     });
+    document.getElementById("login-username").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") realizarLoginStep1();
+    });
+
+    document.getElementById("btn-login-submit").addEventListener("click", realizarLoginStep2);
+    document.getElementById("login-otp").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") realizarLoginStep2();
+    });
+
+    document.getElementById("btn-register-submit").addEventListener("click", realizarCadastro);
+    document.getElementById("register-password").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") realizarCadastro();
+    });
+
+    document.getElementById("btn-setup-2fa-done").addEventListener("click", () => {
+        showAuthScreen("auth-login-step1");
+    });
+
+    document.getElementById("btn-reset-submit").addEventListener("click", realizarRedefinicaoSenha);
+    document.getElementById("reset-new-password").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") realizarRedefinicaoSenha();
+    });
+
+    // Links de navegação dentro do modal
+    document.getElementById("link-go-register").addEventListener("click", (e) => {
+        e.preventDefault();
+        showAuthScreen("auth-register");
+    });
+    document.getElementById("link-go-reset").addEventListener("click", (e) => {
+        e.preventDefault();
+        showAuthScreen("auth-reset-password");
+    });
+    document.getElementById("link-back-to-step1").addEventListener("click", (e) => {
+        e.preventDefault();
+        showAuthScreen("auth-login-step1");
+    });
+    document.getElementById("link-register-back").addEventListener("click", (e) => {
+        e.preventDefault();
+        showAuthScreen("auth-login-step1");
+    });
+    document.getElementById("link-reset-back").addEventListener("click", (e) => {
+        e.preventDefault();
+        showAuthScreen("auth-login-step1");
+    });
+
     btnLogout.addEventListener("click", realizarLogout);
 
     // Configuração de abas
@@ -132,6 +218,14 @@ function obterCookie(nome) {
     return null;
 }
 
+// Alterna a tela de autenticação visível
+function showAuthScreen(screenId) {
+    document.querySelectorAll(".auth-screen").forEach(screen => {
+        screen.classList.add("hidden");
+    });
+    document.getElementById(screenId).classList.remove("hidden");
+}
+
 // Verifica se está logado
 function verificarAutenticacao() {
     const token = obterCookie("session_token");
@@ -140,36 +234,178 @@ function verificarAutenticacao() {
         carregarDadosDoAno();
     } else {
         authModal.classList.add("active");
-        tokenInput.focus();
+        showAuthScreen("auth-login-step1");
+        document.getElementById("login-username").focus();
     }
 }
 
-// Login
-async function realizarLogin() {
-    const token = tokenInput.value.trim();
-    if (!token) return;
+// Primeira etapa de Login (Usuário e Senha)
+async function realizarLoginStep1() {
+    const username = document.getElementById("login-username").value.trim();
+    const password = document.getElementById("login-password").value;
+    const errorEl = document.getElementById("login-step1-error");
+    
+    if (!username || !password) {
+        errorEl.textContent = "Preencha todos os campos.";
+        errorEl.classList.remove("hidden");
+        return;
+    }
 
     exibirLoading(true);
     try {
-        const response = await fetch("/api/auth/login", {
+        const response = await fetch("/api/auth/login/step1", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token })
+            body: JSON.stringify({ username, password })
         });
 
+        const data = await response.json();
         if (response.ok) {
-            authError.classList.add("hidden");
-            authModal.classList.remove("active");
-            tokenInput.value = "";
-            carregarDadosDoAno();
+            errorEl.classList.add("hidden");
+            currentLoginUsername = username;
+            showAuthScreen("auth-login-step2");
+            document.getElementById("login-otp").focus();
         } else {
-            authError.classList.remove("hidden");
-            tokenInput.focus();
+            errorEl.textContent = data.detail || "Usuário ou senha incorretos.";
+            errorEl.classList.remove("hidden");
         }
     } catch (e) {
-        console.error("Erro no login:", e);
-        authError.textContent = "Erro de conexão com o servidor.";
-        authError.classList.remove("hidden");
+        console.error("Erro login etapa 1:", e);
+        errorEl.textContent = "Erro de conexão com o servidor.";
+        errorEl.classList.remove("hidden");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+// Segunda etapa de Login (Google Authenticator 2FA)
+async function realizarLoginStep2() {
+    const code = document.getElementById("login-otp").value.trim();
+    const errorEl = document.getElementById("login-step2-error");
+    
+    if (!code || code.length !== 6) {
+        errorEl.textContent = "Insira o código de 6 dígitos.";
+        errorEl.classList.remove("hidden");
+        return;
+    }
+
+    exibirLoading(true);
+    try {
+        const response = await fetch("/api/auth/login/step2", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: currentLoginUsername, code })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            errorEl.classList.add("hidden");
+            authModal.classList.remove("active");
+            
+            // Limpa campos
+            document.getElementById("login-username").value = "";
+            document.getElementById("login-password").value = "";
+            document.getElementById("login-otp").value = "";
+            
+            carregarDadosDoAno();
+        } else {
+            errorEl.textContent = data.detail || "Código de autenticação inválido.";
+            errorEl.classList.remove("hidden");
+        }
+    } catch (e) {
+        console.error("Erro login etapa 2:", e);
+        errorEl.textContent = "Erro de conexão com o servidor.";
+        errorEl.classList.remove("hidden");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+// Cadastro de usuário
+async function realizarCadastro() {
+    const username = document.getElementById("register-username").value.trim();
+    const password = document.getElementById("register-password").value;
+    const errorEl = document.getElementById("register-error");
+    
+    if (!username || !password) {
+        errorEl.textContent = "Preencha todos os campos.";
+        errorEl.classList.remove("hidden");
+        return;
+    }
+
+    exibirLoading(true);
+    try {
+        const response = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            errorEl.classList.add("hidden");
+            
+            // Exibe a tela de configuração 2FA com QR Code
+            document.getElementById("setup-secret-key").value = data.totp_secret;
+            document.getElementById("setup-qr-img").src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.totp_uri)}`;
+            
+            showAuthScreen("auth-setup-2fa");
+            
+            // Limpa formulário
+            document.getElementById("register-username").value = "";
+            document.getElementById("register-password").value = "";
+        } else {
+            errorEl.textContent = data.detail || "Erro ao criar conta de usuário.";
+            errorEl.classList.remove("hidden");
+        }
+    } catch (e) {
+        console.error("Erro ao registrar:", e);
+        errorEl.textContent = "Erro de conexão com o servidor.";
+        errorEl.classList.remove("hidden");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+// Redefinição de senha com TOTP
+async function realizarRedefinicaoSenha() {
+    const username = document.getElementById("reset-username").value.trim();
+    const code = document.getElementById("reset-otp").value.trim();
+    const new_password = document.getElementById("reset-new-password").value;
+    const errorEl = document.getElementById("reset-error");
+    
+    if (!username || !code || !new_password) {
+        errorEl.textContent = "Preencha todos os campos.";
+        errorEl.classList.remove("hidden");
+        return;
+    }
+
+    exibirLoading(true);
+    try {
+        const response = await fetch("/api/auth/reset-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, code, new_password })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            errorEl.classList.add("hidden");
+            alert("Senha redefinida com sucesso! Prossiga com o login.");
+            showAuthScreen("auth-login-step1");
+            
+            // Limpa formulário
+            document.getElementById("reset-username").value = "";
+            document.getElementById("reset-otp").value = "";
+            document.getElementById("reset-new-password").value = "";
+        } else {
+            errorEl.textContent = data.detail || "Dados incorretos ou código 2FA inválido.";
+            errorEl.classList.remove("hidden");
+        }
+    } catch (e) {
+        console.error("Erro ao redefinir:", e);
+        errorEl.textContent = "Erro de conexão com o servidor.";
+        errorEl.classList.remove("hidden");
     } finally {
         exibirLoading(false);
     }
@@ -179,16 +415,118 @@ async function realizarLogin() {
 async function realizarLogout() {
     exibirLoading(true);
     try {
-        await fetch("/api/auth/logout", { method: "POST" });
+        const token = obterCookie("session_token");
+        await fetch("/api/auth/logout", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` }
+        });
     } catch (e) {
         console.error("Erro no logout:", e);
     } finally {
         // Remove cookie manualmente por precaução
         document.cookie = "session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
         authModal.classList.add("active");
+        showAuthScreen("auth-login-step1");
         exibirLoading(false);
     }
 }
+
+// Exportar CSV
+async function exportarCSV() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    exibirLoading(true);
+    try {
+        const response = await fetch("/api/transacoes/download", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error("Erro na exportação.");
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `transacoes_financeiras_${anoAtivo}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error("Erro ao exportar CSV:", e);
+        alert("Não foi possível exportar os dados.");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+// Importar CSV
+async function importarCSV(file) {
+    if (!file) return;
+
+    const aviso = "ATENÇÃO: O upload de CSV apagará TODOS os lançamentos existentes no banco de dados e criará novos lançamentos baseados no arquivo. Deseja prosseguir?";
+    if (!confirm(aviso)) {
+        if (inputUploadCsv) inputUploadCsv.value = "";
+        return;
+    }
+
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    exibirLoading(true);
+    try {
+        const response = await fetch("/api/transacoes/upload", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` },
+            body: formData
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            alert(data.message || "Dados importados com sucesso!");
+            carregarDadosDoAno();
+        } else {
+            alert(`Falha na importação: ${data.detail || "Verifique a formatação do CSV."}`);
+        }
+    } catch (e) {
+        console.error("Erro ao importar CSV:", e);
+        alert("Ocorreu um erro de rede ao importar o CSV.");
+    } finally {
+        if (inputUploadCsv) inputUploadCsv.value = "";
+        exibirLoading(false);
+    }
+}
+
+// Inicialização e gerenciamento do Tema Claro/Escuro
+function inicializarTema() {
+    const temaSalvo = localStorage.getItem("tema");
+    const btnTheme = document.getElementById("btn-theme-toggle");
+    if (temaSalvo === "claro") {
+        document.body.classList.add("light-theme");
+        if (btnTheme) btnTheme.innerHTML = '<i class="fa-solid fa-sun"></i>';
+    } else {
+        document.body.classList.remove("light-theme");
+        if (btnTheme) btnTheme.innerHTML = '<i class="fa-solid fa-moon"></i>';
+    }
+}
+
+function alternarTema() {
+    const btnTheme = document.getElementById("btn-theme-toggle");
+    if (document.body.classList.contains("light-theme")) {
+        document.body.classList.remove("light-theme");
+        localStorage.setItem("tema", "escuro");
+        if (btnTheme) btnTheme.innerHTML = '<i class="fa-solid fa-moon"></i>';
+    } else {
+        document.body.classList.add("light-theme");
+        localStorage.setItem("tema", "claro");
+        if (btnTheme) btnTheme.innerHTML = '<i class="fa-solid fa-sun"></i>';
+    }
+}
+
 
 // Carregar transações do backend
 async function carregarDadosDoAno() {
@@ -208,7 +546,7 @@ async function carregarDadosDoAno() {
 
         const transacoes = await response.json();
         processarEPivotarDados(transacoes);
-        
+        atualizarFiltroCategoriaOpcoes();
         renderizarTabelas();
         atualizarMetricas();
         popularSeletorTipoDetalhe();
@@ -276,6 +614,30 @@ function popularSeletorTipoDetalhe() {
     
     if (!tiposDisponiveis.includes(tipoDetalheSelecionado)) {
         tipoDetalheSelecionado = tiposDisponiveis[0];
+    }
+}
+
+// Atualizar opções do filtro de Categoria com base nos dados carregados
+function atualizarFiltroCategoriaOpcoes() {
+    const selectFiltroCat = document.getElementById("filter-categoria");
+    if (!selectFiltroCat) return;
+    
+    const categorias = [...new Set(dadosPivotados.map(d => d.categoria).filter(c => c.trim() !== ""))];
+    
+    selectFiltroCat.innerHTML = '<option value="Todas">Todas</option>';
+    categorias.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        if (cat === filtroCategoriaAtiva) {
+            opt.selected = true;
+        }
+        selectFiltroCat.appendChild(opt);
+    });
+    
+    if (!categorias.includes(filtroCategoriaAtiva)) {
+        filtroCategoriaAtiva = "Todas";
+        selectFiltroCat.value = "Todas";
     }
 }
 
@@ -368,8 +730,14 @@ function renderizarTabelaEdicao() {
         return itemA.localeCompare(itemB);
     });
 
+    const dadosFiltrados = dadosOrdenados.filter(row => {
+        const matchTipo = filtroTipoAtivo === "Todos" || row.tipo === filtroTipoAtivo;
+        const matchCategoria = filtroCategoriaAtiva === "Todas" || row.categoria === filtroCategoriaAtiva;
+        return matchTipo && matchCategoria;
+    });
+
     // 2. Preenche o corpo
-    dadosOrdenados.forEach((row, idx) => {
+    dadosFiltrados.forEach((row, idx) => {
         // Encontra o index real no array original dadosPivotados
         const idxOriginal = dadosPivotados.findIndex(d => d === row);
         
@@ -542,8 +910,14 @@ function renderizarTabelaVisualizacao() {
         return itemA.localeCompare(itemB);
     });
 
+    const dadosFiltrados = dadosOrdenados.filter(row => {
+        const matchTipo = filtroTipoAtivo === "Todos" || row.tipo === filtroTipoAtivo;
+        const matchCategoria = filtroCategoriaAtiva === "Todas" || row.categoria === filtroCategoriaAtiva;
+        return matchTipo && matchCategoria;
+    });
+
     // 2. Preenche o corpo (Colorido)
-    dadosOrdenados.forEach(row => {
+    dadosFiltrados.forEach(row => {
         const tr = document.createElement("tr");
         
         // Aplica classe de cor baseado no Tipo

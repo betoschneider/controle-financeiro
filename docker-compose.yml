@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: controle_financeiro_app
+    ports:
+      - "8000:8000"
+    # Carrega variáveis de ambiente do arquivo .env na raiz (inclui ACCESS_TOKEN)
+    env_file: .env
+    volumes:
+      # Persiste o arquivo SQLite no host (diretório); o arquivo será criado em ./data
+      - ./data:/app
+    restart: unless-stopped

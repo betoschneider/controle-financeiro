@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 
 class TransacaoBase(BaseModel):
@@ -24,3 +24,35 @@ class AuthRequest(BaseModel):
 class AuthResponse(BaseModel):
     success: bool
     message: str
+
+class UserCreate(BaseModel):
+    username: EmailStr
+    password: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: EmailStr
+    totp_secret: str
+    totp_uri: str
+
+    class Config:
+        from_attributes = True
+
+class LoginStep1Request(BaseModel):
+    username: EmailStr
+    password: str
+
+class LoginStep1Response(BaseModel):
+    success: bool
+    message: str
+
+class LoginStep2Request(BaseModel):
+    username: EmailStr
+    code: str
+
+class ResetPasswordRequest(BaseModel):
+    username: EmailStr
+    code: str
+    new_password: str
+
+

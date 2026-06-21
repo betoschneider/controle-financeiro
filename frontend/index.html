@@ -20,25 +20,133 @@
         <div class="spinner"></div>
     </div>
 
-    <!-- Modal de Autenticação -->
+    <!-- Modal de Autenticação / Cadastro / Redefinição -->
     <div id="auth-modal" class="modal-overlay">
         <div class="modal-content glass">
-            <div class="modal-header">
-                <h2><i class="fa-solid fa-lock"></i> Autenticação</h2>
-            </div>
-            <div class="modal-body">
-                <p>Informe o token de acesso para continuar.</p>
-                <div class="input-group">
-                    <label for="token-input">Token de Acesso</label>
-                    <input type="password" id="token-input" placeholder="Digite o token...">
+            <!-- Tela 1: Login Passo 1 (Usuário & Senha) -->
+            <div id="auth-login-step1" class="auth-screen">
+                <div class="modal-header">
+                    <h2><i class="fa-solid fa-user-lock"></i> Entrar</h2>
                 </div>
-                <div id="auth-error" class="error-msg hidden">Token inválido! Tente novamente.</div>
+                <div class="modal-body">
+                    <p>Entre com seu usuário e senha de acesso.</p>
+                    <div class="input-group">
+                        <label for="login-username">E-mail</label>
+                        <input type="email" id="login-username" placeholder="seu@email.com">
+                    </div>
+                    <div class="input-group">
+                        <label for="login-password">Senha</label>
+                        <input type="password" id="login-password" placeholder="Senha">
+                    </div>
+                    <div id="login-step1-error" class="error-msg hidden"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="btn-login-next" class="btn btn-primary btn-block">Avançar</button>
+                    <div class="auth-links">
+                        <a href="#" id="link-go-register">Criar Conta</a>
+                        <span style="color: var(--text-muted)">|</span>
+                        <a href="#" id="link-go-reset">Esqueci a Senha</a>
+                    </div>
+                </div>
             </div>
-            <div class="modal-footer">
-                <button id="btn-login" class="btn btn-primary btn-block">Entrar</button>
+
+            <!-- Tela 2: Login Passo 2 (2FA TOTP) -->
+            <div id="auth-login-step2" class="auth-screen hidden">
+                <div class="modal-header">
+                    <h2><i class="fa-solid fa-shield-halved"></i> Autenticação 2FA</h2>
+                </div>
+                <div class="modal-body">
+                    <p>Digite o código de 6 dígitos gerado pelo Google Authenticator.</p>
+                    <div class="input-group">
+                        <label for="login-otp">Código Autenticador</label>
+                        <input type="text" id="login-otp" placeholder="000000" maxlength="6" style="text-align: center; font-size: 20px; letter-spacing: 4px;">
+                    </div>
+                    <div id="login-step2-error" class="error-msg hidden"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="btn-login-submit" class="btn btn-primary btn-block">Confirmar Código</button>
+                    <div class="auth-links">
+                        <a href="#" id="link-back-to-step1">Voltar</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tela 3: Cadastro de Novo Usuário -->
+            <div id="auth-register" class="auth-screen hidden">
+                <div class="modal-header">
+                    <h2><i class="fa-solid fa-user-plus"></i> Novo Cadastro</h2>
+                </div>
+                <div class="modal-body">
+                    <p>Crie uma conta para acessar o Controle Financeiro.</p>
+                    <div class="input-group">
+                        <label for="register-username">E-mail</label>
+                        <input type="email" id="register-username" placeholder="seu@email.com">
+                    </div>
+                    <div class="input-group">
+                        <label for="register-password">Senha</label>
+                        <input type="password" id="register-password" placeholder="Defina uma senha">
+                    </div>
+                    <div id="register-error" class="error-msg hidden"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="btn-register-submit" class="btn btn-primary btn-block">Registrar</button>
+                    <div class="auth-links">
+                        <a href="#" id="link-register-back">Voltar para o Login</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tela 4: Configuração de 2FA (QR Code) -->
+            <div id="auth-setup-2fa" class="auth-screen hidden">
+                <div class="modal-header">
+                    <h2><i class="fa-solid fa-qrcode"></i> Configurar 2FA</h2>
+                </div>
+                <div class="modal-body" style="text-align: center;">
+                    <p>Escaneie o código QR no Google Authenticator ou adicione a chave abaixo manualmente.</p>
+                    <div class="qr-container" style="display: flex; justify-content: center; margin: 15px 0;">
+                        <img id="setup-qr-img" src="" alt="Código QR 2FA" style="border: 6px solid white; border-radius: 8px; max-width: 180px; height: 180px;">
+                    </div>
+                    <div class="input-group">
+                        <label>Chave de Configuração Manual</label>
+                        <input type="text" id="setup-secret-key" readonly style="text-align: center; font-family: monospace; font-size: 14px; background: rgba(255,255,255,0.05); color: var(--color-receita);">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="btn-setup-2fa-done" class="btn btn-primary btn-block">Concluir e Entrar</button>
+                </div>
+            </div>
+
+            <!-- Tela 5: Redefinir Senha -->
+            <div id="auth-reset-password" class="auth-screen hidden">
+                <div class="modal-header">
+                    <h2><i class="fa-solid fa-key"></i> Redefinir Senha</h2>
+                </div>
+                <div class="modal-body">
+                    <p>Insira seu usuário, código do Google Authenticator e a nova senha desejada.</p>
+                    <div class="input-group">
+                        <label for="reset-username">E-mail</label>
+                        <input type="email" id="reset-username" placeholder="seu@email.com">
+                    </div>
+                    <div class="input-group">
+                        <label for="reset-otp">Código Autenticador (2FA)</label>
+                        <input type="text" id="reset-otp" placeholder="Código de 6 dígitos" maxlength="6" style="text-align: center; font-size: 16px;">
+                    </div>
+                    <div class="input-group">
+                        <label for="reset-new-password">Nova Senha</label>
+                        <input type="password" id="reset-new-password" placeholder="Sua nova senha">
+                    </div>
+                    <div id="reset-error" class="error-msg hidden"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="btn-reset-submit" class="btn btn-primary btn-block">Salvar Nova Senha</button>
+                    <div class="auth-links">
+                        <a href="#" id="link-reset-back">Voltar para o Login</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
 
     <div class="app-container">
         <!-- Header -->
@@ -70,6 +178,7 @@
                         <option value="Dez">Dez</option>
                     </select>
                 </div>
+                <button id="btn-theme-toggle" class="btn btn-secondary" title="Alternar Tema"><i class="fa-solid fa-moon"></i></button>
                 <button id="btn-logout" class="btn btn-danger-outline" title="Sair"><i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
         </header>
@@ -106,17 +215,43 @@
             <!-- Tab: Editar Lançamentos -->
             <div id="tab-editar" class="tab-content active">
                 <div class="table-actions glass">
-                    <div class="left-actions">
+                    <div class="left-actions" style="flex-wrap: wrap; gap: 12px;">
                         <button id="btn-adicionar-linha" class="btn btn-secondary">
-                            <i class="fa-solid fa-plus"></i> Adicionar Lançamento
+                            <i class="fa-solid fa-plus"></i> Adicionar
                         </button>
                         <button id="btn-propagar" class="btn btn-info hidden">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> Preencher meses seguintes
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Propagar
                         </button>
+                        
+                        <div style="display: flex; gap: 8px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 12px; margin-left: 4px;">
+                            <div class="control-group">
+                                <label for="filter-tipo" style="font-size: 12px;">Tipo:</label>
+                                <select id="filter-tipo" class="custom-select" style="padding: 4px 8px; font-size: 12px;">
+                                    <option value="Todos">Todos</option>
+                                    <option value="Receita">Receita</option>
+                                    <option value="Despesa">Despesa</option>
+                                    <option value="Investimento">Investimento</option>
+                                    <option value="Reserva">Reserva</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label for="filter-categoria" style="font-size: 12px;">Categoria:</label>
+                                <select id="filter-categoria" class="custom-select" style="padding: 4px 8px; font-size: 12px; max-width: 150px;">
+                                    <option value="Todas">Todas</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="right-actions">
+                        <button id="btn-download-csv" class="btn btn-secondary" title="Exportar CSV Completo">
+                            <i class="fa-solid fa-download"></i> Exportar
+                        </button>
+                        <button id="btn-upload-trigger" class="btn btn-secondary" title="Importar CSV Completo (Substitui todos os dados)">
+                            <i class="fa-solid fa-upload"></i> Importar
+                        </button>
+                        <input type="file" id="input-upload-csv" accept=".csv" class="hidden">
                         <button id="btn-salvar" class="btn btn-primary">
-                            <i class="fa-solid fa-floppy-disk"></i> Salvar Dados
+                            <i class="fa-solid fa-floppy-disk"></i> Salvar
                         </button>
                     </div>
                 </div>
