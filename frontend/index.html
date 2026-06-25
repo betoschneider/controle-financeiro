@@ -15,7 +15,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
-    <link rel="stylesheet" href="css/style.css?v=5">
+    <link rel="stylesheet" href="css/style.css?v=9">
 </head>
 <body>
     <!-- Overlay de Loading -->
@@ -160,11 +160,11 @@
                 <h1>Controle Financeiro</h1>
             </div>
             <div class="header-controls">
-                <div class="control-group">
+                <div class="control-group financial-only">
                     <label for="select-ano">Ano:</label>
                     <select id="select-ano" class="custom-select"></select>
                 </div>
-                <div class="control-group">
+                <div class="control-group financial-only">
                     <label for="select-mes">Filtrar Visão:</label>
                     <select id="select-mes" class="custom-select">
                         <option value="Ano Completo">Ano Completo</option>
@@ -188,7 +188,7 @@
         </header>
 
         <!-- Dashboard Metrics -->
-        <section class="metrics-grid">
+        <section class="metrics-grid financial-only">
             <div class="metric-card glass" id="card-saldo-atual">
                 <div class="metric-icon income"><i class="fa-solid fa-wallet"></i></div>
                 <div class="metric-info">
@@ -208,6 +208,10 @@
 
         <!-- Tabs Navigation -->
         <div class="tabs-container">
+            <div class="tabs-header">
+                <button class="tab-btn active" data-tab="tab-editar"><i class="fa-solid fa-table-list"></i> Controle Financeiro</button>
+                <button class="tab-btn" data-tab="tab-carteira"><i class="fa-solid fa-chart-line"></i> Carteira</button>
+            </div>
             <!-- Tab: Editar Lançamentos -->
             <div id="tab-editar" class="tab-content active">
                 <div class="table-actions glass">
@@ -267,8 +271,138 @@
 
         </div>
 
+        <!-- Carteira de Investimento -->
+        <div id="tab-carteira" class="tab-content investment-page">
+            <section class="investment-toolbar glass">
+                <div>
+                    <h2><i class="fa-solid fa-chart-line"></i> Carteira de Investimento</h2>
+                    <p id="inv-last-updated">Cotações ainda não carregadas.</p>
+                </div>
+                <div class="investment-actions">
+                    <button id="btn-inv-refresh" class="btn btn-secondary" title="Atualizar cotações"><i class="fa-solid fa-rotate"></i></button>
+                    <button id="btn-inv-download" class="btn btn-secondary" title="Exportar CSV"><i class="fa-solid fa-download"></i> Exportar</button>
+                    <button id="btn-inv-upload-trigger" class="btn btn-secondary" title="Importar CSV"><i class="fa-solid fa-upload"></i> Importar</button>
+                    <input type="file" id="btn-inv-upload" accept=".csv" class="hidden">
+                </div>
+            </section>
+
+            <section class="metrics-grid investment-metrics">
+                <div class="metric-card glass">
+                    <div class="metric-icon income"><i class="fa-solid fa-sack-dollar"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-label">Patrimônio Total</span>
+                        <h2 class="metric-value" id="inv-total">R$ 0,00</h2>
+                    </div>
+                </div>
+                <div class="metric-card glass">
+                    <div class="metric-icon projection"><i class="fa-solid fa-layer-group"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-label">Ativos Monitorados</span>
+                        <h2 class="metric-value" id="inv-assets-count">0</h2>
+                    </div>
+                </div>
+                <div class="metric-card glass">
+                    <div class="metric-icon reserve"><i class="fa-solid fa-bullseye"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-label">Soma das Metas</span>
+                        <h2 class="metric-value" id="inv-target-sum">0%</h2>
+                    </div>
+                </div>
+            </section>
+
+            <section class="investment-grid">
+                <div class="chart-card glass">
+                    <h3><i class="fa-solid fa-table"></i> Ativos por Desvio da Meta</h3>
+                    <div class="table-container investment-table-wrap">
+                        <table class="interactive-table investment-table">
+                            <thead>
+                                <tr>
+                                    <th>Ativo</th>
+                                    <th>Empresa</th>
+                                    <th>Qtd</th>
+                                    <th>Preço</th>
+                                    <th>Total</th>
+                                    <th>Meta</th>
+                                    <th>% Atual</th>
+                                    <th>Desvio</th>
+                                    <th>Ramo</th>
+                                    <th>Grupo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inv-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="chart-card glass">
+                    <h3><i class="fa-solid fa-chart-bar"></i> Desvio da Meta</h3>
+                    <div class="chart-container investment-chart-container">
+                        <canvas id="inv-deviation-chart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section class="investment-grid">
+                <div class="chart-card glass">
+                    <h3><i class="fa-solid fa-coins"></i> Sugestão de Aporte</h3>
+                    <div class="investment-form">
+                        <div class="input-group">
+                            <label for="inv-contribution-value">Valor a investir</label>
+                            <input type="number" id="inv-contribution-value" min="0" step="50" value="500">
+                        </div>
+                        <div class="input-group">
+                            <label for="inv-contribution-assets">Quantidade de ativos</label>
+                            <input type="number" id="inv-contribution-assets" min="1" step="1" value="3">
+                        </div>
+                    </div>
+                    <div class="investment-summary">
+                        <span>Total sugerido: <strong id="inv-suggested-total">R$ 0,00</strong></span>
+                        <span>Sobra: <strong id="inv-suggested-leftover">R$ 0,00</strong></span>
+                    </div>
+                    <div class="table-container investment-table-wrap">
+                        <table class="interactive-table investment-table">
+                            <thead>
+                                <tr>
+                                    <th>Ativo</th>
+                                    <th>Valor Unitário</th>
+                                    <th>Cotas Sugeridas</th>
+                                    <th>Total</th>
+                                    <th>Novo Desvio</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inv-suggestion-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div class="investment-confirm">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="inv-confirm-check">
+                            <span class="checkmark"></span>
+                            Confirmo que quero atualizar as quantidades da carteira
+                        </label>
+                        <button id="btn-inv-confirm" class="btn btn-primary" disabled><i class="fa-solid fa-check"></i> Confirmar Aporte</button>
+                    </div>
+                </div>
+
+                <div class="chart-card glass">
+                    <h3><i class="fa-solid fa-clipboard-list"></i> Auditoria</h3>
+                    <div class="table-container investment-table-wrap">
+                        <table class="interactive-table investment-table">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Ação</th>
+                                    <th>Detalhe</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+
         <!-- Charts Section -->
-        <section class="charts-section">
+        <section class="charts-section financial-only">
             <div class="chart-card glass main-chart-card">
                 <h3><i class="fa-solid fa-chart-column"></i> Evolução Mensal de Lançamentos</h3>
                 <div class="chart-container">
@@ -312,7 +446,8 @@
 
     <!-- Scripts da Aplicação -->
     <!-- Versão dos assets para forçar refresh quando necessário -->
-    <script src="js/charts.js?v=5"></script>
-    <script src="js/app.js?v=5"></script>
+    <script src="js/charts.js?v=9"></script>
+    <script src="js/app.js?v=9"></script>
+    <script src="js/investments.js?v=9"></script>
 </body>
 </html>

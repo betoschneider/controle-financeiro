@@ -123,6 +123,87 @@ def create_audit_log(db: Session, user: Optional[models.User], action: str, deta
     db.commit()
     return log
 
+
+def list_audit_logs(db: Session, username: Optional[str], limit: int = 100) -> List[models.AuditLog]:
+    if not username:
+        return []
+    user = get_user_by_username(db, username)
+    if not user:
+        return []
+    return db.query(models.AuditLog).filter(
+        models.AuditLog.user_id == user.id
+    ).order_by(models.AuditLog.id.desc()).limit(limit).all()
+
+
+# --- CRUD para Investimentos ---
+def list_investments(db: Session, username: Optional[str]) -> List[models.InvestmentAsset]:
+    if not username:
+        return []
+    user = get_user_by_username(db, username)
+    if not user:
+        return []
+    return db.query(models.InvestmentAsset).filter(models.InvestmentAsset.owner_id == user.id).all()
+
+def delete_all_investments(db: Session, username: Optional[str]):
+    if not username:
+        return 0
+    user = get_user_by_username(db, username)
+    if not user:
+        return 0
+    cnt = db.query(models.InvestmentAsset).filter(models.InvestmentAsset.owner_id == user.id).delete()
+    db.commit()
+    return cnt
+
+def bulk_create_investments(db: Session, assets: List[dict], username: Optional[str]) -> List[models.InvestmentAsset]:
+    if not username:
+        return []
+    user = get_user_by_username(db, username)
+    if not user:
+        return []
+    created = []
+    for a in assets:
+        ia = models.InvestmentAsset(
+            company=(a.get('company') or '').strip(),
+            ticker=(a.get('ticker') or '').strip(),
+            quantity=int(a.get('quantity') or 0),
+            target=float(a.get('target')) if a.get('target') not in (None, '') else None,
+            sector=(a.get('sector') or '').strip(),
+            group=(a.get('group') or '').strip(),
+            owner_id=user.id
+        )
+        db.add(ia)
+        created.append(ia)
+    db.commit()
+    return created
+
+
+def update_investment_quantities(db: Session, username: Optional[str], purchases: List[dict]) -> List[models.InvestmentAsset]:
+    if not username:
+        return []
+    user = get_user_by_username(db, username)
+    if not user:
+        return []
+
+    updated = []
+    for purchase in purchases:
+        ticker = (purchase.get("ticker") or "").strip()
+        quantity = int(purchase.get("quantity") or 0)
+        if not ticker or quantity <= 0:
+            continue
+
+        asset = db.query(models.InvestmentAsset).filter(
+            models.InvestmentAsset.owner_id == user.id,
+            models.InvestmentAsset.ticker == ticker
+        ).first()
+        if asset:
+            asset.quantity = int(asset.quantity or 0) + quantity
+            updated.append(asset)
+
+    db.commit()
+    for asset in updated:
+        db.refresh(asset)
+    return updated
+
 def create_user(db: Session, user_in: schemas.UserCreate) -> models.User:
     hashed = hash_password(user_in.password)
     totp_secret = pyotp.random_base32()
@@ -141,4 +222,3 @@ def reset_user_password(db: Session, user: models.User, new_password: str) -> mo
     db.commit()
     db.refresh(user)
     return user
-

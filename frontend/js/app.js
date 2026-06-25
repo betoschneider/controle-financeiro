@@ -207,9 +207,16 @@ function configurarEventListeners() {
             btn.classList.add("active");
             const tabId = btn.getAttribute("data-tab");
             document.getElementById(tabId).classList.add("active");
+            document.body.classList.toggle("investment-mode", tabId === "tab-carteira");
             
             // Re-renderiza para garantir a consistência das tabelas
-            renderizarTabelas();
+            if (tabId === "tab-carteira") {
+                if (typeof window.onInvestmentTabActivated === "function") {
+                    window.onInvestmentTabActivated();
+                }
+            } else {
+                renderizarTabelas();
+            }
         });
     });
 }

@@ -19,10 +19,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table('audit_logs', schema=None) as batch_op:
-        # If table exists already, this will raise; typical Alembic flow creates it
-        pass
-    # Create table
     op.create_table(
         'audit_logs',
         sa.Column('id', sa.Integer(), primary_key=True),
@@ -35,6 +31,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table('audit_logs', schema=None) as batch_op:
-        batch_op.drop_index(op.f('ix_audit_logs_user_id'))
+    op.drop_index(op.f('ix_audit_logs_user_id'), table_name='audit_logs')
     op.drop_table('audit_logs')

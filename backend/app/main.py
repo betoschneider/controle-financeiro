@@ -2,7 +2,7 @@ import os
 import secrets
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, Response, Cookie, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, status, Response, Cookie, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -10,8 +10,11 @@ from dotenv import load_dotenv
 import pyotp
 import requests
 
-from . import models, schemas, crud
+from . import models, schemas, crud, finance
 from .database import engine, get_db
+from fastapi.responses import StreamingResponse, JSONResponse
+from io import StringIO
+import csv
 
 # Garante que as tabelas sejam criadas no SQLite
 models.Base.metadata.create_all(bind=engine)
@@ -35,7 +38,7 @@ ACTIVE_SESSIONS = {}
 
 # Dependência para verificar autenticação via Header ou Cookie
 def verificar_autenticacao(
-    authorization: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
     session_token: Optional[str] = Cookie(None)
 ):
     token = None
@@ -53,6 +56,61 @@ def verificar_autenticacao(
             detail="Token de acesso inválido ou ausente."
         )
     return ACTIVE_SESSIONS[token]
+
+
+def _parse_float(value, default=0.0):
+    if value in (None, ""):
+        return default
+    try:
+        return float(str(value).strip().replace("%", "").replace(",", "."))
+    except ValueError:
+        return default
+
+
+def _parse_int(value, default=0):
+    if value in (None, ""):
+        return default
+    try:
+        return int(float(str(value).strip().replace(",", ".")))
+    except ValueError:
+        return default
+
+
+def _investment_payload(items):
+    enriched = []
+    for item in items:
+        price = finance.get_quote(item.ticker) or 0.0
+        total = round((item.quantity or 0) * price, 2)
+        enriched.append({
+            "id": item.id,
+            "company": item.company,
+            "ticker": item.ticker,
+            "quantity": item.quantity,
+            "target": item.target or 0.0,
+            "sector": item.sector or "",
+            "group": item.group or "",
+            "price": price,
+            "total": total,
+        })
+
+    portfolio_total = sum(item["total"] for item in enriched)
+    for item in enriched:
+        current_percent = (item["total"] / portfolio_total * 100) if portfolio_total else 0.0
+        item["current_percent"] = round(current_percent, 2)
+        item["deviation"] = round(current_percent - item["target"], 2)
+
+    enriched.sort(key=lambda item: item["deviation"])
+    target_sum = round(sum(item["target"] for item in enriched), 2)
+    return {
+        "assets": enriched,
+        "metrics": {
+            "portfolio_total": round(portfolio_total, 2),
+            "asset_count": len(enriched),
+            "target_sum": target_sum,
+            "negative_deviation_count": len([item for item in enriched if item["deviation"] < 0]),
+        },
+        "last_updated": datetime.now().isoformat(),
+    }
 
 @app.post("/api/auth/register", response_model=schemas.UserResponse)
 def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
@@ -217,6 +275,120 @@ def login_google(payload: dict, response: Response, db: Session = Depends(get_db
     )
     crud.create_audit_log(db, user, 'login_oauth', f'Login via Google: {user.username}')
     return {"success": True, "message": "Autenticado via Google.", "session_token": session_token}
+
+
+# Investimentos endpoints
+@app.get("/api/investments")
+def get_investments(db: Session = Depends(get_db), username: str = Depends(verificar_autenticacao)):
+    items = crud.list_investments(db, username)
+    result = [
+        {
+            "id": i.id,
+            "company": i.company,
+            "ticker": i.ticker,
+            "quantity": i.quantity,
+            "target": i.target,
+            "sector": i.sector,
+            "group": i.group
+        }
+        for i in items
+    ]
+    return result
+
+
+@app.get("/api/investments/portfolio")
+def get_investment_portfolio(db: Session = Depends(get_db), username: str = Depends(verificar_autenticacao)):
+    items = crud.list_investments(db, username)
+    return _investment_payload(items)
+
+
+@app.post("/api/investments/contribution")
+def apply_investment_contribution(
+    req: schemas.InvestmentContributionRequest,
+    db: Session = Depends(get_db),
+    username: str = Depends(verificar_autenticacao)
+):
+    purchases = [
+        {"ticker": item.ticker.strip(), "quantity": item.quantity}
+        for item in req.purchases
+        if item.ticker.strip() and item.quantity > 0
+    ]
+    if not purchases:
+        raise HTTPException(status_code=400, detail="Nenhuma compra válida foi informada.")
+
+    updated = crud.update_investment_quantities(db, username, purchases)
+    user = crud.get_user_by_username(db, username)
+    details = ", ".join([f"{p['ticker']} +{p['quantity']}" for p in purchases])
+    crud.create_audit_log(db, user, "investments_contribution", f"Aporte confirmado: {details}")
+    return {"success": True, "updated": len(updated), "message": "Aporte confirmado com sucesso."}
+
+
+@app.post("/api/investments/upload")
+def upload_investments(file: UploadFile = File(...), db: Session = Depends(get_db), username: str = Depends(verificar_autenticacao)):
+    content = file.file.read().decode('utf-8-sig')
+    reader = csv.DictReader(StringIO(content))
+    required = {"Empresa", "Ativo", "Quantidade", "Meta", "Ramo", "Grupo"}
+    headers = set(reader.fieldnames or [])
+    if not required.issubset(headers) and not {"company", "ticker", "quantity", "target", "sector", "group"}.issubset(headers):
+        raise HTTPException(
+            status_code=400,
+            detail="Cabeçalhos inválidos. Use Empresa,Ativo,Quantidade,Meta,Ramo,Grupo."
+        )
+
+    assets = []
+    for row in reader:
+        ticker = (row.get('Ativo') or row.get('ticker') or '').strip().upper()
+        if not ticker:
+            continue
+        assets.append({
+            'company': row.get('Empresa') or row.get('company') or '',
+            'ticker': ticker,
+            'quantity': _parse_int(row.get('Quantidade') or row.get('quantity')),
+            'target': _parse_float(row.get('Meta') or row.get('target')),
+            'sector': row.get('Ramo') or row.get('sector') or '',
+            'group': row.get('Grupo') or row.get('group') or ''
+        })
+
+    # Remove existentes e insere novos
+    crud.delete_all_investments(db, username)
+    created = crud.bulk_create_investments(db, assets, username)
+    user = crud.get_user_by_username(db, username)
+    crud.create_audit_log(db, user, 'investments_import', f'Carteira importada com {len(created)} ativos')
+    return {"message": f"{len(created)} ativos importados."}
+
+
+@app.get("/api/investments/download")
+def download_investments(db: Session = Depends(get_db), username: str = Depends(verificar_autenticacao)):
+    items = crud.list_investments(db, username)
+    si = StringIO()
+    fieldnames = ['Empresa','Ativo','Quantidade','Meta','Ramo','Grupo']
+    writer = csv.DictWriter(si, fieldnames=fieldnames)
+    writer.writeheader()
+    for i in items:
+        writer.writerow({
+            'Empresa': i.company,
+            'Ativo': i.ticker,
+            'Quantidade': i.quantity,
+            'Meta': i.target if i.target is not None else '',
+            'Ramo': i.sector or '',
+            'Grupo': i.group or ''
+        })
+    output = si.getvalue()
+    return StreamingResponse(StringIO(output), media_type='text/csv', headers={"Content-Disposition":"attachment; filename=carteira.csv"})
+
+
+@app.get("/api/audit-logs")
+def get_audit_logs(db: Session = Depends(get_db), username: str = Depends(verificar_autenticacao)):
+    logs = crud.list_audit_logs(db, username)
+    return [
+        {
+            "id": log.id,
+            "timestamp": log.timestamp,
+            "action": log.action,
+            "detail": log.detail or "",
+        }
+        for log in logs
+    ]
 
 
 @app.get("/api/transacoes", response_model=List[schemas.TransacaoResponse])
@@ -418,4 +590,3 @@ def upload_csv(
 
 # Servir o frontend estático
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
-

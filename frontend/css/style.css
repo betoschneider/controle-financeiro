@@ -320,6 +320,11 @@ body {
     color: var(--color-investimento);
 }
 
+.metric-icon.reserve {
+    background-color: rgba(241, 196, 15, 0.15);
+    color: var(--color-reserva);
+}
+
 .metric-info {
     display: flex;
     flex-direction: column;
@@ -401,6 +406,10 @@ body {
 
 .tab-content.active {
     display: flex;
+}
+
+body.investment-mode .financial-only {
+    display: none !important;
 }
 
 /* Table Section & Table Actions */
@@ -686,6 +695,139 @@ body.light-theme .row-reserva .cell-select {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+/* Carteira de Investimento */
+.investment-page {
+    gap: 20px;
+}
+
+.investment-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 22px;
+    border-radius: var(--radius-md);
+}
+
+.investment-toolbar h2 {
+    font-size: 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.investment-toolbar p {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.investment-actions,
+.investment-form,
+.investment-confirm,
+.investment-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.investment-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+    gap: 20px;
+}
+
+.investment-table-wrap {
+    max-height: 460px;
+}
+
+.investment-table th:first-child,
+.investment-table td:first-child,
+.investment-table th:nth-child(2),
+.investment-table td:nth-child(2),
+.investment-table th:nth-child(4),
+.investment-table td:nth-child(4) {
+    min-width: initial;
+    width: auto;
+    max-width: none;
+    text-align: left;
+    padding-left: 16px;
+}
+
+.investment-table td.numeric,
+.investment-table th.numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.investment-table tbody tr {
+    background-color: color-mix(in srgb, var(--group-color, transparent) 22%, transparent);
+}
+
+.investment-table tbody tr:hover {
+    background-color: color-mix(in srgb, var(--group-color, transparent) 34%, transparent);
+}
+
+.investment-table .ticker-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, 0.22);
+    font-weight: 600;
+}
+
+.investment-form .input-group {
+    min-width: 180px;
+}
+
+.investment-form input,
+.investment-table input[type="number"] {
+    width: 100%;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+}
+
+.investment-form input:focus,
+.investment-table input[type="number"]:focus {
+    border-color: var(--primary-color);
+}
+
+.investment-summary {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.investment-summary strong {
+    color: var(--text-primary);
+}
+
+.investment-confirm {
+    justify-content: space-between;
+    margin-top: 4px;
+}
+
+.investment-chart-container {
+    min-height: 420px;
+    max-height: 560px;
+}
+
+.deviation-negative {
+    color: var(--color-despesa);
+}
+
+.deviation-positive {
+    color: var(--color-receita);
 }
 
 .chart-container {

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carteira de Investimento</title>
+  <link rel="stylesheet" href="./carteira-investimento.css" />
+</head>
+<body>
+  <header class="page-header">
+    <nav>
+      <a href="/index.html">Controle Financeiro</a>
+      <span>›</span>
+      <strong>Carteira de Investimento</strong>
+    </nav>
+  </header>
+
+  <main class="carteira-container">
+    <section class="section-header">
+      <div>
+        <h1>Carteira de Investimento</h1>
+        <p class="subtitle">Seção separada do controle financeiro para gerenciar ativos e metas.</p>
+      </div>
+      <div class="actions">
+        <button id="refresh-button">Atualizar carteira</button>
+        <button id="export-csv-button">Exportar CSV</button>
+      </div>
+    </section>
+
+    <section class="import-section">
+      <label for="csv-file">Importar CSV</label>
+      <input id="csv-file" type="file" accept=".csv" />
+      <div class="warning-text" id="import-warning">
+        Ao importar os dados, a carteira atual será substituída.
+      </div>
+    </section>
+
+    <section class="metrics-section">
+      <div class="metric-card">
+        <strong id="total-assets">0</strong>
+        <span>Ativos carregados</span>
+      </div>
+      <div class="metric-card">
+        <strong id="total-investment">R$ 0,00</strong>
+        <span>Valor total da carteira</span>
+      </div>
+      <div class="metric-card">
+        <strong id="total-deficit">R$ 0,00</strong>
+        <span>Déficit total da meta</span>
+      </div>
+      <div class="metric-card">
+        <strong id="negative-assets">0</strong>
+        <span>Ativos abaixo da meta</span>
+      </div>
+    </section>
+
+    <section class="tables-section">
+      <article class="table-card">
+        <h2>Ativos da carteira</h2>
+        <table id="portfolio-table">
+          <thead>
+            <tr>
+              <th>Empresa</th>
+              <th>Ativo</th>
+              <th>Quantidade</th>
+              <th>Preço</th>
+              <th>Valor total</th>
+              <th>Meta</th>
+              <th>Diferença</th>
+              <th>Ramo</th>
+              <th>Grupo</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </article>
+
+      <article class="table-card">
+        <h2>Distribuição de investimento</h2>
+        <div class="invest-inputs">
+          <label>
+            Valor a investir
+            <input id="invest-value" type="number" min="0" step="0.01" value="1000" />
+          </label>
+          <label>
+            Quantidade de ativos
+            <input id="asset-count" type="number" min="1" value="3" />
+          </label>
+        </div>
+        <div class="distribution-card">
+          <table id="distribution-table">
+            <thead>
+              <tr>
+                <th>Ativo</th>
+                <th>Preço unitário</th>
+                <th>Cotas sugeridas</th>
+                <th>Valor total</th>
+                <th>Desvio após investimento</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="confirm-section">
+          <label class="checkbox-label">
+            <input id="confirm-checkbox" type="checkbox" />
+            Desejo confirmar o investimento sugerido
+          </label>
+          <button id="confirm-investment-button" class="primary-button" disabled>Confirmar investimento</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="chart-section">
+      <h2>Diferença para a meta</h2>
+      <canvas id="meta-chart" height="250"></canvas>
+    </section>
+
+    <section class="audit-section">
+      <h2>Auditoria</h2>
+      <div id="audit-log"></div>
+    </section>
+  </main>
+
+  <script src="./carteira-investimento.js"></script>
+</body>
+</html>

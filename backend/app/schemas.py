@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import List, Optional
 
 class TransacaoBase(BaseModel):
@@ -26,12 +26,12 @@ class AuthResponse(BaseModel):
     message: str
 
 class UserCreate(BaseModel):
-    username: EmailStr
+    username: str
     password: str
 
 class UserResponse(BaseModel):
     id: int
-    username: EmailStr
+    username: str
     totp_secret: str
     totp_uri: str
 
@@ -39,7 +39,7 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 class LoginStep1Request(BaseModel):
-    username: EmailStr
+    username: str
     password: str
 
 class LoginStep1Response(BaseModel):
@@ -47,12 +47,19 @@ class LoginStep1Response(BaseModel):
     message: str
 
 class LoginStep2Request(BaseModel):
-    username: EmailStr
+    username: str
     code: str
 
 class ResetPasswordRequest(BaseModel):
-    username: EmailStr
+    username: str
     code: str
     new_password: str
 
 
+class InvestmentPurchase(BaseModel):
+    ticker: str
+    quantity: int
+
+
+class InvestmentContributionRequest(BaseModel):
+    purchases: List[InvestmentPurchase]

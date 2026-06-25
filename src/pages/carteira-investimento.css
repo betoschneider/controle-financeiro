@@ -1,0 +1,184 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f5f6fa;
+  color: #2b2b2b;
+}
+
+.page-header {
+  background: #ffffff;
+  border-bottom: 1px solid #ddd;
+  padding: 16px 24px;
+}
+
+.page-header nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.carteira-container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.section-header h1 {
+  margin: 0;
+}
+
+.subtitle {
+  margin: 8px 0 0;
+  color: #555;
+}
+
+.actions button,
+.primary-button {
+  padding: 10px 18px;
+  border: none;
+  background: #0066cc;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.import-section {
+  background: #ffffff;
+  padding: 18px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+}
+
+.warning-text {
+  color: #b33a3a;
+  margin-top: 12px;
+  font-size: 0.95rem;
+}
+
+.metrics-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.metric-card {
+  background: #fff;
+  padding: 18px;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+
+.metric-card strong {
+  display: block;
+  font-size: 1.8rem;
+  margin-bottom: 8px;
+}
+
+.tables-section {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+.table-card,
+.distribution-card,
+.chart-section,
+.audit-section {
+  background: #ffffff;
+  padding: 18px;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+}
+
+.table-card h2,
+.chart-section h2,
+.audit-section h2 {
+  margin-top: 0;
+}
+
+#portfolio-table,
+#distribution-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#portfolio-table th,
+#portfolio-table td,
+#distribution-table th,
+#distribution-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e7e7e7;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+#portfolio-table tbody tr:hover,
+#distribution-table tbody tr:hover {
+  background: #f4f7ff;
+}
+
+.audit-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eaeaea;
+  font-size: 0.92rem;
+}
+
+.invest-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.invest-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.95rem;
+}
+
+.invest-inputs input {
+  padding: 10px 12px;
+  border: 1px solid #c7c7c7;
+  border-radius: 6px;
+}
+
+.confirm-section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+#meta-chart {
+  width: 100%;
+  display: block;
+  background: #fcfcff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 12px;
+  box-sizing: border-box;
+  margin-top: 12px;
+}
+
+#distribution-table tbody tr td {
+  white-space: nowrap;
+}

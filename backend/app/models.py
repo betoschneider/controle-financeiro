@@ -33,3 +33,16 @@ class AuditLog(Base):
     detail = Column(String, nullable=True)
 
 
+class InvestmentAsset(Base):
+    __tablename__ = "investment_assets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company = Column(String, nullable=False, index=True)
+    ticker = Column(String, nullable=False, index=True)
+    quantity = Column(Integer, nullable=False, default=0)
+    target = Column(Float, nullable=True)
+    sector = Column(String, nullable=True)
+    group = Column(String, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+
