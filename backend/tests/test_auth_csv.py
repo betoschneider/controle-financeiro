@@ -2,6 +2,7 @@ import unittest
 from fastapi.testclient import TestClient
 import pyotp
 import io
+from datetime import datetime
 
 from backend.app.main import app, ACTIVE_SESSIONS
 from backend.app.database import SessionLocal, engine
@@ -24,6 +25,21 @@ class TestAuthAndCSV(unittest.TestCase):
         self.db.query(User).filter(User.username.like("testuser%")).delete(synchronize_session=False)
         self.db.query(Transacao).delete()
         self.db.commit()
+        ACTIVE_SESSIONS.clear()
+
+    def _criar_usuario_autenticado(self, username="testuser_projection"):
+        user = User(
+            username=username,
+            password_hash="unused",
+            totp_secret="unused",
+        )
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+
+        session_token = f"token_{username}"
+        ACTIVE_SESSIONS[session_token] = username
+        return user, {"Authorization": f"Bearer {session_token}"}
 
     def test_complete_auth_flow_and_csv_import_export(self):
         username = "testuser_1"
@@ -137,6 +153,92 @@ class TestAuthAndCSV(unittest.TestCase):
         )
         self.assertEqual(logout_response.status_code, 200)
         self.assertNotIn(session_token, ACTIVE_SESSIONS)
+
+    def test_future_year_empty_projects_only_previous_december_to_january(self):
+        user, headers = self._criar_usuario_autenticado()
+        ano_atual = datetime.now().year
+        ano_futuro = ano_atual + 1
+        dezembro = [
+            Transacao(
+                ano=ano_atual,
+                mes=12,
+                item="Salário",
+                tipo="Receita",
+                categoria="Trabalho",
+                valor=5000.00,
+                pago=True,
+                owner_id=user.id,
+            ),
+            Transacao(
+                ano=ano_atual,
+                mes=12,
+                item="Aluguel",
+                tipo="Despesa",
+                categoria="Moradia",
+                valor=1200.00,
+                pago=True,
+                owner_id=user.id,
+            ),
+            Transacao(
+                ano=ano_atual,
+                mes=11,
+                item="Internet",
+                tipo="Despesa",
+                categoria="Casa",
+                valor=100.00,
+                pago=True,
+                owner_id=user.id,
+            ),
+        ]
+        self.db.add_all(dezembro)
+        self.db.commit()
+
+        response = self.client.get(f"/api/transacoes?ano={ano_futuro}", headers=headers)
+
+        self.assertEqual(response.status_code, 200)
+        dados = response.json()
+        self.assertEqual(len(dados), 2)
+        self.assertEqual({tx["mes"] for tx in dados}, {1})
+        self.assertEqual({tx["item"] for tx in dados}, {"Salário", "Aluguel"})
+        self.assertTrue(all(tx["ano"] == ano_futuro for tx in dados))
+        self.assertTrue(all(tx["pago"] is False for tx in dados))
+        self.assertEqual(self.db.query(Transacao).filter(Transacao.ano == ano_futuro).count(), 0)
+
+    def test_future_year_with_saved_transactions_does_not_auto_project(self):
+        user, headers = self._criar_usuario_autenticado()
+        ano_atual = datetime.now().year
+        ano_futuro = ano_atual + 1
+        self.db.add_all([
+            Transacao(
+                ano=ano_atual,
+                mes=12,
+                item="Salário",
+                tipo="Receita",
+                categoria="Trabalho",
+                valor=5000.00,
+                pago=True,
+                owner_id=user.id,
+            ),
+            Transacao(
+                ano=ano_futuro,
+                mes=3,
+                item="Viagem",
+                tipo="Despesa",
+                categoria="Lazer",
+                valor=800.00,
+                pago=False,
+                owner_id=user.id,
+            ),
+        ])
+        self.db.commit()
+
+        response = self.client.get(f"/api/transacoes?ano={ano_futuro}", headers=headers)
+
+        self.assertEqual(response.status_code, 200)
+        dados = response.json()
+        self.assertEqual(len(dados), 1)
+        self.assertEqual(dados[0]["mes"], 3)
+        self.assertEqual(dados[0]["item"], "Viagem")
 
 if __name__ == "__main__":
     unittest.main()

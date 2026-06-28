@@ -399,52 +399,35 @@ def listar_transacoes(
 ):
     """Busca as transações de um ano específico.
     
-    Se o ano for futuro/atual e não tiver dados, replica o ano mais recente do banco (como molde/rascunho),
-    mas NÃO salva no banco automaticamente (apenas retorna para exibição).
-    Se não houver molde disponível no banco, retorna 12 transações zeradas (uma para cada mês).
+    Se o ano for futuro e não tiver dados, usa dezembro do ano anterior como rascunho
+    para janeiro do ano selecionado, mas NÃO salva no banco automaticamente.
+    Fevereiro a dezembro permanecem zerados na montagem da tabela no frontend.
     """
     transacoes = crud.get_transacoes_por_ano(db, ano, _token)
     
-    # Se não houver transações e for o ano atual ou futuro
+    # Se não houver transações e for um ano futuro
     ano_atual_sistema = datetime.now().year
-    if not transacoes and ano >= ano_atual_sistema:
-        # Busca molde do ano mais recente
-        molde_original = crud.get_dados_molde_ano_mais_recente(db, _token)
-        if molde_original:
-            # Filtra o molde agrupando por item, tipo, categoria para evitar duplicidades caso existam
-            # E retorna as transações com o ano atualizado e pago=False (e ID dummy menor que 0)
-            dummy_id = -1
-            for tx in molde_original:
-                transacoes.append(
-                    models.Transacao(
-                        id=dummy_id,
-                        ano=ano,
-                        mes=tx.mes,
-                        item=tx.item,
-                        tipo=tx.tipo,
-                        categoria=tx.categoria,
-                        valor=tx.valor,
-                        pago=False  # Inicializa como previsto/não pago para o futuro
-                    )
+    if not transacoes and ano > ano_atual_sistema:
+        fechamento_ano_anterior = [
+            tx for tx in crud.get_transacoes_por_ano(db, ano - 1, _token)
+            if tx.mes == 12
+        ]
+
+        dummy_id = -1
+        for tx in fechamento_ano_anterior:
+            transacoes.append(
+                models.Transacao(
+                    id=dummy_id,
+                    ano=ano,
+                    mes=1,
+                    item=tx.item,
+                    tipo=tx.tipo,
+                    categoria=tx.categoria,
+                    valor=tx.valor,
+                    pago=False
                 )
-                dummy_id -= 1
-        else:
-            # Sem molde no banco, cria 12 linhas zeradas base (uma para cada mês de Jan a Dez)
-            dummy_id = -1
-            for mes in range(1, 13):
-                transacoes.append(
-                    models.Transacao(
-                        id=dummy_id,
-                        ano=ano,
-                        mes=mes,
-                        item="",
-                        tipo="",
-                        categoria="",
-                        valor=0.0,
-                        pago=False
-                    )
-                )
-                dummy_id -= 1
+            )
+            dummy_id -= 1
                 
     return transacoes
 
