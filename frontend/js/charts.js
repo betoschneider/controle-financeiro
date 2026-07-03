@@ -344,7 +344,9 @@ function atualizarGraficosDetalhamento(transacoes, tipoSelecionado, apenasPagos,
                     callbacks: {
                         label: function(context) {
                             const val = context.parsed;
-                            return ' ' + context.label + ': ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+                            const total = context.dataset.data.reduce((sum, dataValue) => sum + (typeof dataValue === 'number' ? dataValue : 0), 0);
+                            const percent = total ? (val / total) * 100 : 0;
+                            return ' ' + context.label + ': ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val) + ' (' + percent.toFixed(1) + '%)';
                         }
                     }
                 }
@@ -386,7 +388,10 @@ function atualizarGraficosDetalhamento(transacoes, tipoSelecionado, apenasPagos,
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return ' ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.x);
+                            const value = context.parsed.x;
+                            const total = context.dataset.data.reduce((sum, dataValue) => sum + (typeof dataValue === 'number' ? dataValue : 0), 0);
+                            const percent = total ? (value / total) * 100 : 0;
+                            return ' ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value) + ' (' + percent.toFixed(1) + '%)';
                         }
                     }
                 }
