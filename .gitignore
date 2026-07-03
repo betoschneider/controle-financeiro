@@ -15,3 +15,6 @@ wheels/
 # Database
 *.db
 controle_financeiro.db
+
+# Estrutura de pastas
+estrutura.txt
