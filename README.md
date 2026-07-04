@@ -3,7 +3,7 @@
 Aplicativo web de controle financeiro pessoal com duas áreas isoladas dentro da mesma aplicação:
 
 - **Controle Financeiro**: lançamentos mensais, saldos, filtros, gráficos, importação/exportação CSV e autenticação.
-- **Carteira de Investimento**: acompanhamento de ativos B3, cotações via Yahoo Finance, metas de alocação, sugestão de aporte, importação/exportação CSV e auditoria.
+- **Carteira de Investimento**: acompanhamento de ativos B3, cotações via Yahoo Finance, metas de alocação, sugestão de aporte e importação/exportação CSV.
 
 O projeto usa **FastAPI**, **SQLAlchemy**, **SQLite**, **Alembic** e frontend em **HTML/CSS/JavaScript** sem framework.
 
@@ -45,7 +45,7 @@ O delta % do **Saldo Total do Ano Projetado** é calculado em relação ao **Sal
 
 Todos os filtros e ações ficam na mesma barra, acima da tabela:
 
-- **Ano**: seleciona o ano dos lançamentos (janela de 4 anos).
+- **Ano**: seleciona o ano dos lançamentos.
 - **Mês**: filtra a visão por mês específico ou mantém "Ano Completo". O filtro de mês **não** afeta os cards de Saldo Total do Ano.
 - **Tipo**: filtra as linhas da tabela por Receita, Despesa, Investimento ou Reserva.
 - **Categoria**: filtra as linhas da tabela por categoria.
@@ -58,7 +58,7 @@ Todos os filtros e ações ficam na mesma barra, acima da tabela:
 
 - Edição inline de Item, Tipo, Categoria, Valor e status de pago (checkbox).
 - Colunas de meses exibidas conforme filtro de Mês selecionado.
-- **Cabeçalho do mês atual destacado** com cor de fundo diferenciada (roxo semitransparente) e borda inferior, facilitando a localização visual.
+- **Cabeçalho do mês atual destacado** com cor de fundo diferenciada e borda inferior.
 - Linhas coloridas por tipo (verde = Receita, vermelho = Despesa, azul = Investimento, amarelo = Reserva).
 - Exclusão de linha com confirmação.
 
@@ -112,26 +112,9 @@ Seção acessada pela aba **Carteira**, isolada dos controles do Controle Financ
 - Cálculo de total sugerido, sobra e novo desvio após aporte.
 - Checkbox de confirmação antes de atualizar a carteira.
 
-#### CSV e Auditoria
+#### CSV
 
 - Importação/exportação CSV da carteira.
-- Auditoria de ações relevantes registrada em `audit_logs`.
-
----
-
-### Auditoria
-
-Eventos registrados em `audit_logs`:
-
-- Cadastro de conta.
-- Login etapa 1 (senha).
-- Login completo com 2FA.
-- Login via Google.
-- Cadastro via Google.
-- Reset de senha.
-- Logout.
-- Importação de carteira.
-- Confirmação de aporte.
 
 ---
 
@@ -199,25 +182,37 @@ Observações:
 ## Estrutura Principal
 
 ```text
-backend/app/
-  main.py           Rotas FastAPI e montagem do frontend
-  models.py         Modelos SQLAlchemy
-  schemas.py        Schemas Pydantic
-  crud.py           Operações de banco
-  finance.py        Consulta/cache de cotações
-
-frontend/
-  index.html
-  css/style.css
-  js/app.js         Controle financeiro, auth, CSV e navegação
-  js/charts.js      Gráficos do controle financeiro
-  js/investments.js Carteira de investimento
-
-alembic/versions/
-  61f5ca4cd77f_create_initial_tables.py
-  d191e4391174_add_owner_id_to_transactions.py
-  7a9d3b1f4c2c_add_audit_logs_table.py
-  8c2f1b4d5a7a_add_investment_assets_table.py
+app/
+  main.py               App FastAPI, CORS, Auth Google e mount /static
+  config.py             .env, Engine, SessionLocal, Base, QUOTE_CACHE_TTL
+  models.py             Modelos SQLAlchemy
+  transactions.py       Router + lógica de transações + validações
+  investments.py        Router + lógica de investimentos + yfinance
+  static/
+    index.html
+    carteira-investimento.html
+    google_oauth_callback.html
+    css/
+      style.css
+    js/
+      app.js
+alembic/
+  env.py
+  versions/
+    61f5ca4cd77f_create_initial_tables.py
+    d191e4391174_add_owner_id_to_transactions.py
+    7a9d3b1f4c2c_add_audit_logs_table.py
+    8c2f1b4d5a7a_add_investment_assets_table.py
+    a1b2c3d4e5f6_drop_audit_logs_table.py
+ data/
+ scripts/
+   alembic_stamp_head_if_needed.py
+   import_csv.py
+ .env
+ Dockerfile
+ docker-compose.yml
+ pyproject.toml
+ uv.lock
 ```
 
 ---
@@ -243,8 +238,6 @@ Execute os comandos a partir da raiz do projeto:
 cd /home/beto/projetos/controle-financeiro
 ```
 
-> Se executado em outra pasta, o Python pode não encontrar o pacote `backend` e retornar `ModuleNotFoundError: No module named 'backend'`.
-
 ### 3. Instalar dependências
 
 ```bash
@@ -257,12 +250,12 @@ uv sync
 uv run alembic upgrade head
 ```
 
-> Por padrão, o app local usa `sqlite:///./controle_financeiro.db`. No Docker, a variável `DATABASE_URL` aponta para `sqlite:///./data/controle_financeiro.db`.
+> Por padrão, o app usa `sqlite:///./data/controle_financeiro.db`.
 
 ### 5. Rodar o servidor
 
 ```bash
-uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8520
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8520
 ```
 
 Acesse: `http://127.0.0.1:8520`
@@ -270,7 +263,7 @@ Acesse: `http://127.0.0.1:8520`
 Para desenvolvimento com reload automático:
 
 ```bash
-uv run uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8520
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8520
 ```
 
 ---
@@ -280,15 +273,19 @@ uv run uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8520
 Crie ou edite `.env` conforme necessário:
 
 ```env
+DATABASE_URL=sqlite:///./data/controle_financeiro.db
+SECRET_KEY=sua_chave_secreta_aqui
+GOOGLE_CLIENT_ID=seu_client_id_aqui
+QUOTE_CACHE_TTL=3600
 ACCOUNT_QUOTA=0
-DATABASE_URL=sqlite:///./controle_financeiro.db
 ```
 
 Notas:
 
 - `ACCOUNT_QUOTA=0` significa sem limite de criação de contas. Qualquer valor positivo limita o número máximo de usuários.
 - `DATABASE_URL` é opcional no modo local; há fallback no código.
-- O Google OAuth usa o Client ID configurado na meta tag `google-client-id` em `frontend/index.html`.
+- `GOOGLE_CLIENT_ID` é usado no login Google OAuth.
+- `QUOTE_CACHE_TTL` define o cache de cotações do `yfinance` em segundos.
 
 ---
 
@@ -297,7 +294,6 @@ Notas:
 O `docker-compose.yml` monta:
 
 - `./data:/app/data` para persistir o SQLite.
-- `./frontend:/app/frontend:ro` para refletir mudanças no frontend sem rebuild.
 
 Subir a aplicação:
 
@@ -328,14 +324,7 @@ PYTHONPATH=. uv run pytest -q
 Verificar sintaxe Python:
 
 ```bash
-uv run python -m compileall backend/app
-```
-
-Verificar sintaxe dos scripts frontend:
-
-```bash
-node --check frontend/js/app.js
-node --check frontend/js/investments.js
+uv run python -m compileall app
 ```
 
 ---
@@ -357,10 +346,10 @@ node --check frontend/js/investments.js
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET` | `/api/transacoes?ano=YYYY` | Lista lançamentos do ano |
-| `POST` | `/api/transacoes/bulk-save?ano=YYYY` | Salva todos os lançamentos do ano |
-| `GET` | `/api/transacoes/download` | Exporta CSV completo |
-| `POST` | `/api/transacoes/upload` | Importa CSV (substitui dados) |
+| `GET` | `/api/transactions?ano=YYYY` | Lista lançamentos do ano |
+| `POST` | `/api/transactions/bulk-save?ano=YYYY` | Salva todos os lançamentos do ano |
+| `GET` | `/api/transactions/download` | Exporta CSV completo |
+| `POST` | `/api/transactions/upload` | Importa CSV (substitui dados) |
 
 ### Carteira de Investimento
 
@@ -372,12 +361,6 @@ node --check frontend/js/investments.js
 | `GET` | `/api/investments/download` | Exporta CSV da carteira |
 | `POST` | `/api/investments/contribution` | Confirma aporte sugerido |
 
-### Auditoria
-
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/api/audit-logs` | Lista eventos de auditoria |
-
 ---
 
 ## Observações de Uso
@@ -387,4 +370,4 @@ node --check frontend/js/investments.js
 - O comparativo % do **Saldo Total do Ano Projetado** é calculado em relação ao Saldo Total Efetivo do ano anterior, carregado em background após o carregamento principal.
 - O cache das cotações fica em memória; reiniciar o servidor limpa o cache.
 - A consulta ao Yahoo Finance depende de conectividade e disponibilidade externa.
-- Em caso de cache do navegador, os assets usam versão `?v=12`; incremente em `frontend/index.html` ao fazer deploy de mudanças estáticas.
+- Em caso de cache do navegador, os assets usam versão `?v=14`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.

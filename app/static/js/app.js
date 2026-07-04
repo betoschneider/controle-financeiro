@@ -45,13 +45,7 @@ const filterCategoria = document.getElementById("filter-categoria");
 
 const loadingOverlay = document.getElementById("loading-overlay");
 
-// Inicialização
-document.addEventListener("DOMContentLoaded", () => {
-    inicializarTema();
-    inicializarSeletores();
-    configurarEventListeners();
-    verificarAutenticacao();
-});
+// Inicialização movida para o final do arquivo (DOMContentLoaded unificado)
 
 // Inicializa os selects de Ano e Event Listeners Básicos
 function inicializarSeletores() {
@@ -504,7 +498,7 @@ async function exportarCSV() {
 
     exibirLoading(true);
     try {
-        const response = await fetch("/api/transacoes/download", {
+        const response = await fetch("/api/transactions/download", {
             headers: { "Authorization": `Bearer ${token}` }
         });
 
@@ -545,7 +539,7 @@ async function importarCSV(file) {
 
     exibirLoading(true);
     try {
-        const response = await fetch("/api/transacoes/upload", {
+        const response = await fetch("/api/transactions/upload", {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}` },
             body: formData
@@ -606,7 +600,7 @@ async function atualizarSeletorAnos() {
     let anos = [anoAtual, anoSeguinte];
 
     try {
-        const response = await fetch("/api/transacoes/anos", {
+        const response = await fetch("/api/transactions/anos", {
             headers: { "Authorization": `Bearer ${token}` }
         });
         if (response.ok) {
@@ -651,7 +645,7 @@ async function carregarDadosDoAno() {
     try {
         const token = obterCookie("session_token");
         await atualizarSeletorAnos();
-        const response = await fetch(`/api/transacoes?ano=${anoAtivo}`, {
+        const response = await fetch(`/api/transactions?ano=${anoAtivo}`, {
             headers: { "Authorization": `Bearer ${token}` }
         });
 
@@ -685,7 +679,7 @@ async function carregarDadosDoAno() {
 async function carregarDadosAnoAnterior(token) {
     try {
         const anoAnterior = anoAtivo - 1;
-        const resp = await fetch(`/api/transacoes?ano=${anoAnterior}`, {
+        const resp = await fetch(`/api/transactions?ano=${anoAnterior}`, {
             headers: { "Authorization": `Bearer ${token}` }
         });
         if (!resp.ok) {
@@ -1308,7 +1302,7 @@ async function salvarDadosServidor() {
         });
 
         const token = obterCookie("session_token");
-        const response = await fetch(`/api/transacoes/bulk-save?ano=${anoAtivo}`, {
+        const response = await fetch(`/api/transactions/bulk-save?ano=${anoAtivo}`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -1376,3 +1370,769 @@ function boolValue(val) {
     if (typeof val === 'string') return val.toLowerCase() === 'true';
     return !!val;
 }
+
+// --- Gráficos (ex charts.js) ---
+let chartMensalInstancia = null;
+let chartRoscaInstancia = null;
+let chartBarrasHInstancia = null;
+
+const CORES_RGB = {
+    "Receita": [46, 204, 113],
+    "Despesa": [231, 76, 60],
+    "Investimento": [52, 152, 219],
+    "Reserva": [241, 196, 15]
+};
+
+const CORES_EXTRAS_RGB = [
+    [155, 89, 182],
+    [26, 188, 156],
+    [230, 126, 34],
+    [52, 73, 94]
+];
+
+function corTextoTema() {
+    return getComputedStyle(document.body).getPropertyValue('--text-primary').trim() || '#f1f1f5';
+}
+
+function corTextoSecundarioTema() {
+    return getComputedStyle(document.body).getPropertyValue('--text-secondary').trim() || '#9090a2';
+}
+
+function gerarCoresCategoriasDistintas(rgbBase, quantidade) {
+    const cores = [];
+    const opMax = 0.95;
+    const opMin = 0.35;
+    for (let i = 0; i < quantidade; i++) {
+        const opacidade = quantidade === 1
+            ? opMax
+            : opMax - (i * (opMax - opMin) / (quantidade - 1));
+        cores.push(`rgba(${rgbBase[0]}, ${rgbBase[1]}, ${rgbBase[2]}, ${opacidade.toFixed(2)})`);
+    }
+    return cores;
+}
+
+function obterCorTipoRGB(tipoStr, index = 0) {
+    const busca = tipoStr.trim().charAt(0).toUpperCase() + tipoStr.trim().slice(1).toLowerCase();
+    if (CORES_RGB[busca]) {
+        return CORES_RGB[busca];
+    }
+    return CORES_EXTRAS_RGB[index % CORES_EXTRAS_RGB.length];
+}
+
+function atualizarGraficoMensal(transacoes, anoSelecionado) {
+    const canvas = document.getElementById('chart-mensal');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const mesesAbreviados = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+    const dadosPorTipo = {
+        "Receita": { efetivado: Array(12).fill(0), previsto: Array(12).fill(0) },
+        "Despesa": { efetivado: Array(12).fill(0), previsto: Array(12).fill(0) },
+        "Investimento": { efetivado: Array(12).fill(0), previsto: Array(12).fill(0) },
+        "Reserva": { efetivado: Array(12).fill(0), previsto: Array(12).fill(0) }
+    };
+
+    const hoje = new Date();
+    const mesAtualSistema = hoje.getMonth() + 1;
+    const anoAtualSistema = hoje.getFullYear();
+
+    transacoes.forEach(t => {
+        const tipo = t.tipo.trim().charAt(0).toUpperCase() + t.tipo.trim().slice(1).toLowerCase();
+        if (!dadosPorTipo[tipo]) {
+            dadosPorTipo[tipo] = { efetivado: Array(12).fill(0), previsto: Array(12).fill(0) };
+        }
+
+        const idxMes = t.mes - 1;
+        if (idxMes < 0 || idxMes > 11) return;
+
+        const valor = parseFloat(t.valor) || 0.0;
+        const pago = boolValue(t.pago);
+        const isMesPassado = (anoSelecionado < anoAtualSistema) || (anoSelecionado === anoAtualSistema && t.mes < mesAtualSistema);
+
+        if (pago) {
+            dadosPorTipo[tipo].efetivado[idxMes] += valor;
+        } else if (!isMesPassado) {
+            dadosPorTipo[tipo].previsto[idxMes] += valor;
+        }
+    });
+
+    const mediasAnuais = {};
+    Object.keys(dadosPorTipo).forEach(tipo => {
+        const totalEfetivado = dadosPorTipo[tipo].efetivado.reduce((a, b) => a + b, 0);
+        const totalPrevisto = dadosPorTipo[tipo].previsto.reduce((a, b) => a + b, 0);
+        mediasAnuais[tipo] = (totalEfetivado + totalPrevisto) / 12.0;
+    });
+
+    const datasets = [];
+    let colorIdx = 0;
+
+    Object.keys(dadosPorTipo).forEach(tipo => {
+        const rgb = obterCorTipoRGB(tipo, colorIdx++);
+        const corEfetivado = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 1.0)`;
+        const corPrevisto = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.35)`;
+
+        datasets.push({
+            type: 'bar',
+            label: `${tipo} (Efetivado)`,
+            data: dadosPorTipo[tipo].efetivado,
+            backgroundColor: corEfetivado,
+            borderColor: corEfetivado,
+            borderWidth: 1,
+            stack: tipo,
+            barPercentage: 0.8,
+            categoryPercentage: 0.8
+        });
+
+        datasets.push({
+            type: 'bar',
+            label: `${tipo} (Previsto)`,
+            data: dadosPorTipo[tipo].previsto,
+            backgroundColor: corPrevisto,
+            borderColor: corEfetivado,
+            borderWidth: 1,
+            borderDash: [2, 2],
+            stack: tipo,
+            barPercentage: 0.8,
+            categoryPercentage: 0.8
+        });
+
+        datasets.push({
+            type: 'line',
+            label: `Média Anual ${tipo}`,
+            data: Array(12).fill(mediasAnuais[tipo]),
+            borderColor: corEfetivado,
+            borderWidth: 2,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 0,
+            pointHitRadius: 0,
+            order: -1
+        });
+    });
+
+    if (chartMensalInstancia) {
+        chartMensalInstancia.destroy();
+    }
+
+    chartMensalInstancia = new Chart(ctx, {
+        data: {
+            labels: mesesAbreviados,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: corTextoTema(),
+                        font: { family: 'Outfit', size: 12 },
+                        filter: function(item) {
+                            return !item.text.includes('(Previsto)');
+                        }
+                    }
+                },
+                tooltip: {
+                    mode: 'x',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            if (context.parsed.y !== null) {
+                                label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: { color: 'rgba(128, 128, 128, 0.15)' },
+                    ticks: { color: corTextoSecundarioTema(), font: { family: 'Outfit' } }
+                },
+                y: {
+                    grid: { color: 'rgba(128, 128, 128, 0.15)' },
+                    ticks: {
+                        color: corTextoSecundarioTema(),
+                        font: { family: 'Outfit' },
+                        callback: function(value) {
+                            return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function atualizarGraficosDetalhamento(transacoes, tipoSelecionado, apenasPagos, mesFiltrado) {
+    const canvasRosca = document.getElementById('chart-rosca');
+    const canvasBarrasH = document.getElementById('chart-barras-h');
+    if (!canvasRosca || !canvasBarrasH) return;
+
+    const ctxRosca = canvasRosca.getContext('2d');
+    const ctxBarrasH = canvasBarrasH.getContext('2d');
+    const numMesFiltrado = MAPA_REVERSO_MES[mesFiltrado] || null;
+
+    const transacoesFiltradas = transacoes.filter(t => {
+        const tipoT = t.tipo.trim().charAt(0).toUpperCase() + t.tipo.trim().slice(1).toLowerCase();
+        const tipoS = tipoSelecionado.trim().charAt(0).toUpperCase() + tipoSelecionado.trim().slice(1).toLowerCase();
+        if (tipoT !== tipoS) return false;
+        if (numMesFiltrado !== null && t.mes !== numMesFiltrado) return false;
+        if (apenasPagos && !boolValue(t.pago)) return false;
+        return true;
+    });
+
+    const categoriaSomas = {};
+    transacoesFiltradas.forEach(t => {
+        const cat = t.categoria.trim() || "Sem Categoria";
+        const valor = parseFloat(t.valor) || 0.0;
+        categoriaSomas[cat] = (categoriaSomas[cat] || 0) + valor;
+    });
+
+    const itemSomas = {};
+    transacoesFiltradas.forEach(t => {
+        const item = t.item.trim() || "Sem Nome";
+        const valor = parseFloat(t.valor) || 0.0;
+        itemSomas[item] = (itemSomas[item] || 0) + valor;
+    });
+
+    const labelsCategorias = Object.keys(categoriaSomas);
+    const valoresCategorias = Object.values(categoriaSomas);
+    const itensOrdenados = Object.entries(itemSomas)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15);
+    const labelsItens = itensOrdenados.map(i => i[0]);
+    const valoresItens = itensOrdenados.map(i => i[1]);
+    const rgbBase = obterCorTipoRGB(tipoSelecionado);
+
+    if (chartRoscaInstancia) chartRoscaInstancia.destroy();
+    if (chartBarrasHInstancia) chartBarrasHInstancia.destroy();
+
+    if (valoresCategorias.length === 0) return;
+
+    const backgroundColorsRosca = gerarCoresCategoriasDistintas(rgbBase, labelsCategorias.length);
+    const mapaCoresCategorias = {};
+    labelsCategorias.forEach((cat, idx) => {
+        mapaCoresCategorias[cat] = backgroundColorsRosca[idx];
+    });
+
+    chartRoscaInstancia = new Chart(ctxRosca, {
+        type: 'doughnut',
+        data: {
+            labels: labelsCategorias,
+            datasets: [{
+                data: valoresCategorias,
+                backgroundColor: backgroundColorsRosca,
+                borderColor: 'rgba(128,128,128,0.15)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: corTextoTema(), font: { family: 'Outfit', size: 11 } }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const val = context.parsed;
+                            const total = context.dataset.data.reduce((sum, dataValue) => sum + (typeof dataValue === 'number' ? dataValue : 0), 0);
+                            const percent = total ? (val / total) * 100 : 0;
+                            return ' ' + context.label + ': ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val) + ' (' + percent.toFixed(1) + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    const coresBarrasH = labelsItens.map(itemLabel => {
+        const transacaoDoItem = transacoesFiltradas.find(t => (t.item.trim() || "Sem Nome") === itemLabel);
+        const categoriaDoItem = transacaoDoItem ? (transacaoDoItem.categoria.trim() || "Sem Categoria") : null;
+        if (categoriaDoItem && mapaCoresCategorias[categoriaDoItem]) {
+            return mapaCoresCategorias[categoriaDoItem];
+        }
+        return `rgba(${rgbBase[0]}, ${rgbBase[1]}, ${rgbBase[2]}, 0.85)`;
+    });
+
+    chartBarrasHInstancia = new Chart(ctxBarrasH, {
+        type: 'bar',
+        data: {
+            labels: labelsItens,
+            datasets: [{
+                data: valoresItens,
+                backgroundColor: coresBarrasH,
+                borderColor: coresBarrasH,
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed.x;
+                            const total = context.dataset.data.reduce((sum, dataValue) => sum + (typeof dataValue === 'number' ? dataValue : 0), 0);
+                            const percent = total ? (value / total) * 100 : 0;
+                            return ' ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value) + ' (' + percent.toFixed(1) + '%)';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(128, 128, 128, 0.15)' },
+                    ticks: {
+                        color: corTextoSecundarioTema(),
+                        font: { family: 'Outfit' },
+                        callback: function(value) {
+                            return 'R$ ' + value.toLocaleString('pt-BR');
+                        }
+                    }
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: corTextoTema(), font: { family: 'Outfit', size: 12 } }
+                }
+            }
+        }
+    });
+}
+
+// --- Investimentos (ex investments.js) ---
+let investmentPortfolio = null;
+let investmentDeviationChart = null;
+let investmentSuggestions = [];
+
+const GROUP_COLORS = [
+    "#2ecc71", "#3498db", "#f1c40f", "#e74c3c",
+    "#00d2d3", "#ff7f50", "#9b59b6", "#95a5a6"
+];
+
+function initInvestments() {
+    if (!document.getElementById("tab-carteira")) return;
+
+    const uploadInput = document.getElementById("btn-inv-upload");
+    const uploadTrigger = document.getElementById("btn-inv-upload-trigger");
+    const refreshButton = document.getElementById("btn-inv-refresh");
+    const downloadButton = document.getElementById("btn-inv-download");
+    const contributionValue = document.getElementById("inv-contribution-value");
+    const contributionAssets = document.getElementById("inv-contribution-assets");
+    const confirmCheck = document.getElementById("inv-confirm-check");
+    const confirmButton = document.getElementById("btn-inv-confirm");
+
+    if (uploadTrigger && uploadInput) uploadTrigger.addEventListener("click", () => uploadInput.click());
+    if (uploadInput) {
+        uploadInput.addEventListener("change", (e) => {
+            if (e.target.files && e.target.files[0]) uploadInvestments(e.target.files[0]);
+        });
+    }
+    if (refreshButton) refreshButton.addEventListener("click", carregarInvestments);
+    if (downloadButton) downloadButton.addEventListener("click", downloadInvestments);
+    if (contributionValue) contributionValue.addEventListener("input", renderInvestmentSuggestions);
+    if (contributionAssets) contributionAssets.addEventListener("input", renderInvestmentSuggestions);
+    if (confirmCheck && confirmButton) {
+        confirmCheck.addEventListener("change", () => {
+            confirmButton.disabled = !confirmCheck.checked || investmentSuggestions.length === 0;
+        });
+    }
+    if (confirmButton) confirmButton.addEventListener("click", confirmInvestmentContribution);
+
+    window.onInvestmentTabActivated = () => {
+        if (!investmentPortfolio) carregarInvestments();
+    };
+}
+
+async function carregarInvestments() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    exibirLoading(true);
+    try {
+        const resp = await fetch("/api/investments/portfolio", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (resp.status === 401) {
+            realizarLogout();
+            return;
+        }
+        if (!resp.ok) throw new Error("Falha ao carregar carteira");
+
+        investmentPortfolio = await resp.json();
+        renderInvestmentPortfolio();
+        renderInvestmentSuggestions();
+    } catch (e) {
+        console.error(e);
+        alert("Não foi possível carregar a carteira de investimento.");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+function renderInvestmentPortfolio() {
+    const assets = investmentPortfolio?.assets || [];
+    const metrics = investmentPortfolio?.metrics || {};
+    setText("inv-total", formatarMoeda(metrics.portfolio_total || 0));
+    setText("inv-assets-count", String(metrics.asset_count || 0));
+    setText("inv-target-sum", `${formatNumber(metrics.target_sum || 0, 2)}%`);
+
+    const updatedAt = investmentPortfolio?.last_updated ? new Date(investmentPortfolio.last_updated) : null;
+    setText("inv-last-updated", updatedAt ? `Última consulta: ${updatedAt.toLocaleString("pt-BR")}` : "Cotações ainda não carregadas.");
+
+    const tbody = document.getElementById("inv-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (!assets.length) {
+        renderEmptyRow(tbody, 10, "Importe um CSV para iniciar a carteira.");
+        renderDeviationChart([]);
+        return;
+    }
+
+    assets.forEach(asset => {
+        const tr = document.createElement("tr");
+        tr.style.setProperty("--group-color", colorForGroup(asset.group));
+        appendCell(tr, asset.ticker, "", true);
+        tr.lastChild.innerHTML = "";
+        const ticker = document.createElement("span");
+        ticker.className = "ticker-pill";
+        ticker.textContent = asset.ticker;
+        tr.lastChild.appendChild(ticker);
+        appendCell(tr, asset.company);
+        appendCell(tr, asset.quantity, "numeric");
+        appendCell(tr, formatarMoeda(asset.price || 0), "numeric");
+        appendCell(tr, formatarMoeda(asset.total || 0), "numeric");
+        appendCell(tr, `${formatNumber(asset.target || 0, 2)}%`, "numeric");
+        appendCell(tr, `${formatNumber(asset.current_percent || 0, 2)}%`, "numeric");
+        appendCell(tr, `${formatNumber(asset.deviation || 0, 2)}%`, `numeric ${asset.deviation < 0 ? "deviation-negative" : "deviation-positive"}`);
+        appendCell(tr, asset.sector || "-");
+        appendCell(tr, asset.group || "-");
+        tbody.appendChild(tr);
+    });
+
+    renderDeviationChart(assets);
+}
+
+function renderDeviationChart(assets) {
+    const canvas = document.getElementById("inv-deviation-chart");
+    if (!canvas || typeof Chart === "undefined") return;
+
+    const labels = assets.map(asset => asset.ticker);
+    const values = assets.map(asset => asset.deviation || 0);
+    const colors = assets.map(asset => colorForGroup(asset.group));
+    const borderColors = assets.map(asset => asset.deviation < 0 ? "rgba(231, 76, 60, 0.9)" : "rgba(46, 204, 113, 0.9)");
+    const textColor = getComputedStyle(document.body).getPropertyValue("--text-secondary").trim() || "#9090a2";
+    const gridColor = getComputedStyle(document.body).getPropertyValue("--border-color").trim() || "rgba(255,255,255,.08)";
+
+    const zeroLinePlugin = {
+        id: "zeroLine",
+        afterDatasetsDraw(chart) {
+            const xScale = chart.scales.x;
+            const yScale = chart.scales.y;
+            if (!xScale || !yScale) return;
+            const x = xScale.getPixelForValue(0);
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x, yScale.top);
+            ctx.lineTo(x, yScale.bottom);
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = "#ff4757";
+            ctx.stroke();
+            ctx.restore();
+        }
+    };
+
+    if (investmentDeviationChart) investmentDeviationChart.destroy();
+    investmentDeviationChart = new Chart(canvas, {
+        type: "bar",
+        data: {
+            labels,
+            datasets: [{
+                label: "Desvio",
+                data: values,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `Desvio: ${formatNumber(ctx.parsed.x, 2)}%`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: gridColor },
+                    ticks: { color: textColor, callback: (value) => `${value}%` }
+                },
+                y: {
+                    grid: { color: "transparent" },
+                    ticks: { color: textColor }
+                }
+            }
+        },
+        plugins: [zeroLinePlugin]
+    });
+}
+
+function renderInvestmentSuggestions() {
+    const assets = investmentPortfolio?.assets || [];
+    const tbody = document.getElementById("inv-suggestion-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    investmentSuggestions = [];
+
+    if (!assets.length) {
+        renderEmptyRow(tbody, 5, "Sem ativos para sugerir aporte.");
+        updateSuggestionTotals(0, getContributionValue());
+        updateConfirmState();
+        return;
+    }
+
+    const contributionValue = getContributionValue();
+    const assetsCountInput = document.getElementById("inv-contribution-assets");
+    const assetCount = Math.max(1, Math.min(parseInt(assetsCountInput?.value || "1", 10), assets.length));
+    const candidates = assets.filter(asset => (asset.price || 0) > 0).slice(0, assetCount);
+    const valuePerAsset = candidates.length ? contributionValue / candidates.length : 0;
+
+    candidates.forEach(asset => {
+        const quantity = Math.max(0, Math.floor(valuePerAsset / asset.price));
+        investmentSuggestions.push({
+            ticker: asset.ticker,
+            price: asset.price,
+            currentQuantity: asset.quantity,
+            target: asset.target,
+            quantity,
+        });
+    });
+
+    investmentSuggestions.forEach((suggestion, index) => {
+        const tr = document.createElement("tr");
+        const asset = assets.find(item => item.ticker === suggestion.ticker);
+        tr.style.setProperty("--group-color", colorForGroup(asset?.group || ""));
+        appendCell(tr, suggestion.ticker);
+        appendCell(tr, formatarMoeda(suggestion.price), "numeric");
+
+        const quantityCell = document.createElement("td");
+        quantityCell.className = "numeric";
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "0";
+        input.step = "1";
+        input.value = String(suggestion.quantity);
+        input.addEventListener("input", () => {
+            investmentSuggestions[index].quantity = Math.max(0, parseInt(input.value || "0", 10));
+            refreshSuggestionRows();
+        });
+        quantityCell.appendChild(input);
+        tr.appendChild(quantityCell);
+
+        appendCell(tr, "", "numeric suggestion-subtotal");
+        appendCell(tr, "", "numeric suggestion-new-deviation");
+        tbody.appendChild(tr);
+    });
+
+    refreshSuggestionRows();
+}
+
+function refreshSuggestionRows() {
+    const assets = investmentPortfolio?.assets || [];
+    const rows = document.querySelectorAll("#inv-suggestion-tbody tr");
+    const currentTotal = assets.reduce((sum, asset) => sum + (asset.total || 0), 0);
+    const suggestedTotal = investmentSuggestions.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const newPortfolioTotal = currentTotal + suggestedTotal;
+
+    rows.forEach((row, index) => {
+        const suggestion = investmentSuggestions[index];
+        const asset = assets.find(item => item.ticker === suggestion.ticker);
+        const subtotal = suggestion.quantity * suggestion.price;
+        const newAssetTotal = ((asset?.quantity || 0) + suggestion.quantity) * suggestion.price;
+        const newPercent = newPortfolioTotal > 0 ? (newAssetTotal / newPortfolioTotal) * 100 : 0;
+        const newDeviation = newPercent - (asset?.target || 0);
+        row.querySelector(".suggestion-subtotal").textContent = formatarMoeda(subtotal);
+        const deviationCell = row.querySelector(".suggestion-new-deviation");
+        deviationCell.textContent = `${formatNumber(newDeviation, 2)}%`;
+        deviationCell.classList.toggle("deviation-negative", newDeviation < 0);
+        deviationCell.classList.toggle("deviation-positive", newDeviation >= 0);
+    });
+
+    updateSuggestionTotals(suggestedTotal, getContributionValue() - suggestedTotal);
+    updateConfirmState();
+}
+
+async function confirmInvestmentContribution() {
+    const purchases = investmentSuggestions
+        .filter(item => item.quantity > 0)
+        .map(item => ({ ticker: item.ticker, quantity: item.quantity }));
+
+    if (!purchases.length) {
+        alert("Informe ao menos uma cota para confirmar o aporte.");
+        return;
+    }
+
+    const token = obterCookie("session_token");
+    exibirLoading(true);
+    try {
+        const resp = await fetch("/api/investments/contribution", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ purchases })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "Falha ao confirmar aporte.");
+        alert(data.message || "Aporte confirmado.");
+        document.getElementById("inv-confirm-check").checked = false;
+        await carregarInvestments();
+    } catch (e) {
+        console.error(e);
+        alert(e.message || "Não foi possível confirmar o aporte.");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+async function uploadInvestments(file) {
+    if (!confirm("A importação removerá os dados atuais da carteira de investimento e substituirá pelo CSV selecionado. Deseja continuar?")) {
+        document.getElementById("btn-inv-upload").value = "";
+        return;
+    }
+
+    const token = obterCookie("session_token");
+    const fd = new FormData();
+    fd.append("file", file);
+    exibirLoading(true);
+    try {
+        const resp = await fetch("/api/investments/upload", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` },
+            body: fd
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "Falha na importação.");
+        alert(data.message || "Carteira importada.");
+        await carregarInvestments();
+    } catch (e) {
+        console.error(e);
+        alert(e.message || "Não foi possível importar a carteira.");
+    } finally {
+        document.getElementById("btn-inv-upload").value = "";
+        exibirLoading(false);
+    }
+}
+
+async function downloadInvestments() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+    exibirLoading(true);
+    try {
+        const response = await fetch("/api/investments/download", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error("Falha na exportação.");
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "carteira.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error(e);
+        alert("Não foi possível exportar a carteira.");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+function updateSuggestionTotals(total, leftover) {
+    setText("inv-suggested-total", formatarMoeda(total));
+    setText("inv-suggested-leftover", formatarMoeda(leftover));
+}
+
+function updateConfirmState() {
+    const confirmCheck = document.getElementById("inv-confirm-check");
+    const confirmButton = document.getElementById("btn-inv-confirm");
+    if (!confirmCheck || !confirmButton) return;
+    const hasPurchases = investmentSuggestions.some(item => item.quantity > 0);
+    confirmButton.disabled = !confirmCheck.checked || !hasPurchases;
+}
+
+function getContributionValue() {
+    return Math.max(0, parseFloat(document.getElementById("inv-contribution-value")?.value || "0"));
+}
+
+function appendCell(row, value, className = "") {
+    const td = document.createElement("td");
+    if (className) td.className = className;
+    td.textContent = value;
+    row.appendChild(td);
+}
+
+function renderEmptyRow(tbody, colSpan, message) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = colSpan;
+    td.textContent = message;
+    td.style.textAlign = "center";
+    td.style.color = "var(--text-secondary)";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+}
+
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+function formatNumber(value, digits = 2) {
+    return new Intl.NumberFormat("pt-BR", {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits
+    }).format(value || 0);
+}
+
+function colorForGroup(group) {
+    const text = String(group || "Sem grupo");
+    let hash = 0;
+    for (let i = 0; i < text.length; i += 1) {
+        hash = ((hash << 5) - hash) + text.charCodeAt(i);
+        hash |= 0;
+    }
+    return GROUP_COLORS[Math.abs(hash) % GROUP_COLORS.length];
+}
+
+// --- Inicialização unificada ---
+document.addEventListener("DOMContentLoaded", () => {
+    inicializarTema();
+    inicializarSeletores();
+    configurarEventListeners();
+    initInvestments();
+    verificarAutenticacao();
+});

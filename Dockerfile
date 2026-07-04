@@ -1,34 +1,17 @@
-FROM python:3.12-slim
-
-# Copia o executável do 'uv' direto da imagem oficial
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-ENV PYTHONUNBUFFERED=1
-# Garante a instalação no escopo global do Python do container
-ENV UV_SYSTEM_PYTHON=1
+FROM ghcr.io/astral-sh/uv:python3.12-alpine
 
 WORKDIR /app
 
-# Diretório para persistência de dados (SQLite)
-RUN mkdir -p /app/data \
-    && chmod 0775 /app/data
+RUN mkdir -p /app/data && chmod 0775 /app/data
 
-# Instala dependências do sistema necessárias
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential gcc libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
-# Copia os arquivos de gerência de pacotes primeiro
-COPY pyproject.toml uv.lock* /app/
+COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./
+COPY scripts/ ./scripts/
 
-# Instala as dependências usando o uv de forma otimizada
-RUN uv pip install --no-cache -e . 2>/dev/null || uv pip install --no-cache -r pyproject.toml 2>/dev/null || uv pip install --no-cache .
-
-# Copia o código da aplicação
-COPY . /app
-
-# Nova porta desejada
 EXPOSE 8520
 
-# Comando padrão iniciando o Uvicorn na nova porta
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8520"]
+CMD sh -c "uv run python3 scripts/alembic_stamp_head_if_needed.py && uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8520"

@@ -3,17 +3,11 @@ services:
     build: .
     container_name: controle_financeiro_app
     ports:
-      # Mapeia a porta 8521 do seu host (sua máquina) para a porta 8521 interna do container
       - "8520:8520"
     env_file:
       - .env
     volumes:
-      # CORREÇÃO: Cria uma pasta de dados dedicada no container (ex: /app/data)
-      # Isso evita que o volume limpe o código fonte que está na raiz (/app)
       - ./data:/app/data
-      # Monta o frontend do host diretamente no container para refletir mudanças sem rebuild
-      - ./frontend:/app/frontend:ro
     environment:
-      # Faz o app usar o arquivo SQLite persistido em ./data dentro do container
       - DATABASE_URL=sqlite:///./data/controle_financeiro.db
     restart: unless-stopped
