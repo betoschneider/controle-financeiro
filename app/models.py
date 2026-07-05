@@ -9,9 +9,9 @@ class Transacao(Base):
     id = Column(Integer, primary_key=True, index=True)
     ano = Column(Integer, index=True, nullable=False)
     mes = Column(Integer, index=True, nullable=False)
-    item = Column(String, index=True, nullable=False)
-    tipo = Column(String, index=True, nullable=False)
-    categoria = Column(String, index=True, nullable=False)
+    item = Column(String(100), index=True, nullable=False)  # Limite de comprimento
+    tipo = Column(String(50), index=True, nullable=False)  # Limite de comprimento
+    categoria = Column(String(50), index=True, nullable=False)  # Limite de comprimento
     valor = Column(Float, nullable=False, default=0.0)
     pago = Column(Boolean, nullable=False, default=False)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)

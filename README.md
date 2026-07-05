@@ -371,3 +371,50 @@ uv run python -m compileall app
 - O cache das cotações fica em memória; reiniciar o servidor limpa o cache.
 - A consulta ao Yahoo Finance depende de conectividade e disponibilidade externa.
 - Em caso de cache do navegador, os assets usam versão `?v=14`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.
+
+---
+
+## 🔒 Ajustes de Segurança Implementados
+
+### Vulnerabilidades Críticas Corrigidas
+
+1. **Chave Secreta Padrão**: Removido o valor padrão `"change-me"` da `SECRET_KEY`. Agora, a aplicação exige que a `SECRET_KEY` seja configurada via variável de ambiente.
+
+2. **Cookie de Sessão sem `HttpOnly`**: Corrigido para definir `httponly=True` em todos os cookies de sessão, prevenindo ataques XSS.
+
+3. **CORS Permissivo**: Restringido `allow_origins` apenas aos domínios confiáveis, prevenindo ataques CSRF.
+
+4. **Exposição de `totp_secret`**: Removido `totp_secret` da resposta de registro, evitando exposição de dados sensíveis.
+
+### Vulnerabilidades Importantes Corrigidas
+
+1. **Gerenciamento de Sessão em Memória**: Adicionado comentário indicando a necessidade de implementar um sistema robusto de gerenciamento de sessão com armazenamento persistente (Redis, PostgreSQL).
+
+2. **Falta de Validação de `GOOGLE_CLIENT_ID`**: Implementada validação do `aud` (audience) no token Google para garantir que o token seja emitido para a aplicação correta.
+
+3. **Falta de Limite de Taxa para Tentativas de Login**: Adicionado comentário indicando a necessidade de implementar um mecanismo de limite de taxa para evitar ataques de força bruta.
+
+4. **Falta de Validação de Entrada no Nível do Modelo**: Adicionados limites de comprimento para os campos `item`, `tipo` e `categoria` no modelo `Transacao`.
+
+### Boas Práticas de Segurança
+
+- **Hash de Senha com `bcrypt`**: As funções `hash_password` e `verify_password` utilizam `bcrypt`, que é um algoritmo de hash de senha robusto e recomendado.
+- **Autenticação de Dois Fatores (2FA) com TOTP**: A implementação de TOTP com `pyotp` para registro, login de dois passos e redefinição de senha é uma boa adição de segurança.
+- **Validação de Entrada com Pydantic**: O uso de `BaseModel` do Pydantic para validar a entrada das requisições é uma boa prática.
+- **Quota de Contas**: A implementação de `ACCOUNT_QUOTA` ajuda a prevenir ataques de esgotamento de recursos.
+
+### Próximos Passos Recomendados
+
+1. **Implementar um sistema robusto de gerenciamento de sessão**: Utilizar armazenamento persistente (Redis, PostgreSQL) para sessões.
+2. **Implementar limites de taxa**: Utilizar bibliotecas como `slowapi` ou `fastapi-limiter` para evitar ataques de força bruta.
+3. **Revisar e testar**: Garantir que todas as alterações estejam funcionando corretamente.
+
+---
+
+## 📚 Recursos Adicionais
+
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/): Lista das 10 vulnerabilidades de segurança mais críticas em aplicações web.
+- [FastAPI Security](https://fastapi.tiangolo.com/tutorial/security/): Documentação oficial do FastAPI sobre segurança.
+- [CORS MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS): Documentação sobre CORS e como configurá-lo corretamente.
+- [bcrypt](https://pypi.org/project/bcrypt/): Documentação da biblioteca `bcrypt` para hash de senhas.
+- [pyotp](https://pypi.org/project/pyotp/): Documentação da biblioteca `pyotp` para autenticação de dois fatores.

@@ -3,6 +3,8 @@ from typing import Optional
 
 from fastapi import Cookie, Depends, Header, HTTPException, status
 
+# TODO: Implementar um sistema robusto de gerenciamento de sessão com armazenamento persistente (Redis, PostgreSQL).
+# Atualmente, as sessões são armazenadas em memória e serão perdidas quando a aplicação reiniciar.
 ACTIVE_SESSIONS = {}
 
 

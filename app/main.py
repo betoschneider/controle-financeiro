@@ -67,7 +67,12 @@ app = FastAPI(title="Controle Financeiro")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://betoschneider.com",
+        "https://financeiro.betoschneider.com",
+        "http://localhost:8520",
+        "https://google.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -106,43 +111,63 @@ class ResetPasswordRequest(BaseModel):
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
     existing_user = get_user_by_username(db, user_in.username)
     if existing_user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome de usuário já cadastrado.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nome de usuário já cadastrado.",
+        )
 
     try:
         quota = int(os.getenv("ACCOUNT_QUOTA", "0"))
     except Exception:
         quota = 0
     if quota > 0 and count_users(db) >= quota:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Limite de contas atingido.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Limite de contas atingido."
+        )
 
     user = create_user(db, user_in.username, user_in.password)
     totp = pyotp.TOTP(user.totp_secret)
-    totp_uri = totp.provisioning_uri(name=user.username, issuer_name="ControleFinanceiro")
+    totp_uri = totp.provisioning_uri(
+        name=user.username, issuer_name="ControleFinanceiro"
+    )
     return UserResponse(
         id=user.id,
         username=user.username,
-        totp_secret=user.totp_secret,
         totp_uri=totp_uri,
     )
 
 
 @app.post("/api/auth/login/step1")
 def login_step1(auth_req: LoginStep1Request, db: Session = Depends(get_db)):
+    # TODO: Implementar limite de taxa para evitar ataques de força bruta.
     user = get_user_by_username(db, auth_req.username)
     if not user or not verify_password(auth_req.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário ou senha incorretos.")
-    return {"success": True, "message": "Senha válida. Prossiga para a autenticação em duas etapas."}
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário ou senha incorretos.",
+        )
+    return {
+        "success": True,
+        "message": "Senha válida. Prossiga para a autenticação em duas etapas.",
+    }
 
 
 @app.post("/api/auth/login/step2")
-def login_step2(auth_req: LoginStep2Request, response: Response, db: Session = Depends(get_db)):
+def login_step2(
+    auth_req: LoginStep2Request, response: Response, db: Session = Depends(get_db)
+):
     user = get_user_by_username(db, auth_req.username)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado."
+        )
 
     totp = pyotp.TOTP(user.totp_secret)
     if not totp.verify(auth_req.code):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Código de autenticação inválido.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Código de autenticação inválido.",
+        )
 
     session_token = criar_sessao(user.username)
     response.set_cookie(
@@ -153,18 +178,27 @@ def login_step2(auth_req: LoginStep2Request, response: Response, db: Session = D
         samesite="lax",
         path="/",
     )
-    return {"success": True, "message": "Autenticado com sucesso.", "session_token": session_token}
+    return {
+        "success": True,
+        "message": "Autenticado com sucesso.",
+        "session_token": session_token,
+    }
 
 
 @app.post("/api/auth/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     user = get_user_by_username(db, req.username)
     if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuário não encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuário não encontrado."
+        )
 
     totp = pyotp.TOTP(user.totp_secret)
     if not totp.verify(req.code):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código de autenticação inválido para redefinição.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Código de autenticação inválido para redefinição.",
+        )
 
     reset_user_password(db, user, req.new_password)
     return {"success": True, "message": "Senha redefinida com sucesso."}
@@ -181,7 +215,9 @@ def logout(response: Response, session_token: Optional[str] = Cookie(None)):
 def login_google(payload: dict, response: Response, db: Session = Depends(get_db)):
     id_token = payload.get("id_token")
     if not id_token:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="id_token ausente")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="id_token ausente"
+        )
 
     try:
         r = requests.get(
@@ -190,15 +226,23 @@ def login_google(payload: dict, response: Response, db: Session = Depends(get_db
             timeout=5,
         )
         if r.status_code != 200:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token Google inválido")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token Google inválido"
+            )
         info = r.json()
         email = info.get("email")
         if not email:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token Google inválido: sem email")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token Google inválido: sem email",
+            )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao validar token Google: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao validar token Google: {str(e)}",
+        )
 
     user = get_user_by_username(db, email)
     if not user:
@@ -207,7 +251,10 @@ def login_google(payload: dict, response: Response, db: Session = Depends(get_db
         except Exception:
             quota = 0
         if quota > 0 and count_users(db) >= quota:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Limite de contas atingido.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Limite de contas atingido.",
+            )
         user = create_user_google(db, email)
 
     session_token = criar_sessao(user.username)
@@ -219,7 +266,11 @@ def login_google(payload: dict, response: Response, db: Session = Depends(get_db
         samesite="lax",
         path="/",
     )
-    return {"success": True, "message": "Autenticado via Google.", "session_token": session_token}
+    return {
+        "success": True,
+        "message": "Autenticado via Google.",
+        "session_token": session_token,
+    }
 
 
 app.include_router(transactions.router)
