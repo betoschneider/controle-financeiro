@@ -170,6 +170,8 @@
                 <h1>Planejamento Financeiro</h1>
             </div>
             <div class="header-controls">
+                <button id="btn-settings-redirect" class="btn btn-secondary hidden" title="Gerenciar Categorias"><i
+                        class="fa-solid fa-tags"></i></button>
                 <button id="btn-theme-toggle" class="btn btn-secondary" title="Alternar Tema"><i
                         class="fa-solid fa-moon"></i></button>
                 <button id="btn-logout" class="btn btn-danger-outline" title="Sair"><i
@@ -182,6 +184,7 @@
             <button class="tab-btn active" data-tab="tab-editar"><i class="fa-solid fa-table-list"></i> Controle
                 Financeiro</button>
             <button class="tab-btn" data-tab="tab-carteira"><i class="fa-solid fa-chart-line"></i> Carteira</button>
+            <button id="btn-tab-configuracoes" class="tab-btn hidden" data-tab="tab-configuracoes"><i class="fa-solid fa-tags"></i> Gerenciar Categorias</button>
         </div>
 
         <!-- Gráfico Evolução Mensal (acima das métricas) -->
@@ -481,6 +484,95 @@
                 </div>
             </div>
         </section>
+
+        <!-- Gráfico de Comportamento de Categorias (posicionado ao final de todos os gráficos) -->
+        <section class="charts-section financial-only">
+            <div class="chart-card glass">
+                <h3><i class="fa-solid fa-chart-pie"></i> Categorias: Meta vs % Remuneração e Desvio</h3>
+                <div class="chart-container" style="height: 350px;">
+                    <canvas id="chart-categoria-comparativo"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab: Configurações -->
+        <div id="tab-configuracoes" class="tab-content">
+            <div class="settings-container">
+                <h2><i class="fa-solid fa-tags"></i> Gerenciar Categorias</h2>
+
+                <!-- Gerenciamento de Tipos -->
+                <div class="settings-card glass">
+                    <h3><i class="fa-solid fa-tags"></i> Gerenciar Tipos</h3>
+                    <div class="settings-form">
+                        <div style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <label for="settings-tipo-nome">Nome do Tipo</label>
+                                <input type="text" id="settings-tipo-nome" placeholder="Ex: Investimento">
+                            </div>
+                            <button id="btn-settings-add-tipo" class="btn btn-primary">
+                                <i class="fa-solid fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container settings-table-wrap">
+                        <table class="interactive-table settings-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nome</th>
+                                    <th>Protegido</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="settings-tipos-tbody">
+                                <tr><td colspan="4" style="text-align:center;color:var(--text-secondary);">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Gerenciamento de Categorias -->
+                <div class="settings-card glass">
+                    <h3><i class="fa-solid fa-folder-tree"></i> Gerenciar Categorias</h3>
+                    <div class="settings-form">
+                        <div style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 150px;">
+                                <label for="settings-cat-tipo">Tipo</label>
+                                <select id="settings-cat-tipo" class="custom-select"></select>
+                            </div>
+                            <div style="flex: 1; min-width: 150px;">
+                                <label for="settings-cat-nome">Nome</label>
+                                <input type="text" id="settings-cat-nome" placeholder="Ex: Alimentação">
+                            </div>
+                            <div style="flex: 1; min-width: 100px;">
+                                <label for="settings-cat-valor">Valor</label>
+                                <input type="number" id="settings-cat-valor" step="0.01" value="0.00">
+                            </div>
+                            <button id="btn-settings-add-categoria" class="btn btn-primary">
+                                <i class="fa-solid fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container settings-table-wrap">
+                        <table class="interactive-table settings-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Tipo</th>
+                                    <th>Nome</th>
+                                    <th>Valor</th>
+                                    <th>Protegido</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="settings-categorias-tbody">
+                                <tr><td colspan="6" style="text-align:center;color:var(--text-secondary);">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts da Aplicação -->

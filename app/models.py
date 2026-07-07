@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, Text
 
 from app.config import Base
 
@@ -37,3 +37,24 @@ class InvestmentAsset(Base):
     sector = Column(String, nullable=True)
     group = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+
+class Tipo(Base):
+    """Tipos de categoria (ex: Receita, Despesa, etc.)"""
+    __tablename__ = "tipos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(50), unique=True, nullable=False, index=True)
+    is_protegido = Column(Boolean, nullable=False, default=False)
+
+
+class Categoria(Base):
+    """Categorias financeiras vinculadas a tipos e usuários"""
+    __tablename__ = "categorias"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(100), nullable=False, index=True)
+    valor = Column(Float, nullable=False, default=0.0)
+    tipo_id = Column(Integer, ForeignKey("tipos.id"), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    is_protegido = Column(Boolean, nullable=False, default=False)

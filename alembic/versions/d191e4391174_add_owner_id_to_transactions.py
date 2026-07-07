@@ -1,4 +1,4 @@
-"""add_owner_id_to_transactions
+"""add_owner_id_to_transactions (now a no-op since owner_id is in initial migration)
 
 Revision ID: d191e4391174
 Revises: 61f5ca4cd77f
@@ -19,17 +19,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
-    with op.batch_alter_table('transacoes', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('owner_id', sa.Integer(), nullable=True))
-        batch_op.create_index(batch_op.f('ix_transacoes_owner_id'), ['owner_id'], unique=False)
-        batch_op.create_foreign_key('fk_transacoes_owner_id_users', 'users', ['owner_id'], ['id'])
+    """Upgrade schema.
+    This migration is now a no-op because the transacoes table (including
+    owner_id) is already created in the initial migration 61f5ca4cd77f.
+    """
+    pass
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    with op.batch_alter_table('transacoes', schema=None) as batch_op:
-        batch_op.drop_constraint('fk_transacoes_owner_id_users', type_='foreignkey')
-        batch_op.drop_index(batch_op.f('ix_transacoes_owner_id'))
-        batch_op.drop_column('owner_id')
-
+    pass

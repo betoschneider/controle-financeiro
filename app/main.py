@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app import investments, models, transactions
+from app import investments, models, settings, transactions
 from app.auth import criar_sessao, encerrar_sessao, verificar_autenticacao
 from app.config import engine, get_db
 from app.models import User
@@ -133,6 +133,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     return UserResponse(
         id=user.id,
         username=user.username,
+        totp_secret=user.totp_secret,
         totp_uri=totp_uri,
     )
 
@@ -275,5 +276,6 @@ def login_google(payload: dict, response: Response, db: Session = Depends(get_db
 
 app.include_router(transactions.router)
 app.include_router(investments.router)
+app.include_router(settings.router)
 
 app.mount("/", StaticFiles(directory="app/static", html=True), name="static")

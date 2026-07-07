@@ -189,6 +189,16 @@ function configurarEventListeners() {
 
     btnLogout.addEventListener("click", realizarLogout);
 
+    const btnRedirect = document.getElementById("btn-settings-redirect");
+    if (btnRedirect) {
+        btnRedirect.addEventListener("click", () => {
+            const configTabBtn = document.querySelector('.tab-btn[data-tab="tab-configuracoes"]');
+            if (configTabBtn) {
+                configTabBtn.click();
+            }
+        });
+    }
+
     // Google OAuth button (popup flow)
     const btnGoogle = document.getElementById('btn-google-login');
     if (btnGoogle) btnGoogle.addEventListener('click', iniciarLoginGoogle);
@@ -204,15 +214,19 @@ function configurarEventListeners() {
             const tabId = btn.getAttribute("data-tab");
             document.getElementById(tabId).classList.add("active");
             document.body.classList.toggle("investment-mode", tabId === "tab-carteira");
+            document.body.classList.toggle("settings-mode", tabId === "tab-configuracoes");
             
             // Re-renderiza para garantir a consistência das tabelas
             if (tabId === "tab-carteira") {
                 if (typeof window.onInvestmentTabActivated === "function") {
                     window.onInvestmentTabActivated();
                 }
+            } else if (tabId === "tab-configuracoes") {
+                carregarSettings();
             } else {
                 renderizarTabelas();
             }
+            atualizarVisibilidadeBotaoConfig();
         });
     });
 }
@@ -292,10 +306,12 @@ function verificarAutenticacao() {
     if (token) {
         authModal.classList.remove("active");
         carregarDadosDoAno();
+        atualizarVisibilidadeBotaoConfig();
     } else {
         authModal.classList.add("active");
         showAuthScreen("auth-login-step1");
         document.getElementById("login-username").focus();
+        atualizarVisibilidadeBotaoConfig();
     }
 }
 
@@ -488,6 +504,33 @@ async function realizarLogout() {
         authModal.classList.add("active");
         showAuthScreen("auth-login-step1");
         exibirLoading(false);
+        atualizarVisibilidadeBotaoConfig();
+    }
+}
+
+// Atualizar a visibilidade do botão de configurações do header e da aba Configurações
+function atualizarVisibilidadeBotaoConfig() {
+    const btnRedirect = document.getElementById("btn-settings-redirect");
+    if (!btnRedirect) return;
+    
+    const token = obterCookie("session_token");
+    const activeTabBtn = document.querySelector(".tab-btn.active");
+    const activeTab = activeTabBtn ? activeTabBtn.getAttribute("data-tab") : null;
+    
+    if (token && activeTab === "tab-editar") {
+        btnRedirect.classList.remove("hidden");
+    } else {
+        btnRedirect.classList.add("hidden");
+    }
+
+    // Mostra/esconde o botão da aba Configurações quando logado
+    const configTabBtn = document.getElementById("btn-tab-configuracoes");
+    if (configTabBtn) {
+        if (token) {
+            configTabBtn.classList.remove("hidden");
+        } else {
+            configTabBtn.classList.add("hidden");
+        }
     }
 }
 
@@ -658,6 +701,11 @@ async function carregarDadosDoAno() {
 
         const transacoes = await response.json();
         processarEPivotarDados(transacoes);
+        // Carrega dropdown de tipos e categorias para a tabela
+        await carregarDropdownData();
+        // Carrega dados de configurações (tipos e categorias)
+        await carregarSettings();
+        atualizarFiltroTipoOpcoes();
         atualizarFiltroCategoriaOpcoes();
         renderizarTabelas();
         atualizarMetricas();
@@ -710,6 +758,95 @@ async function carregarDadosAnoAnterior(token) {
     }
 }
 
+// Cache de dropdown data (tipos e categorias) para usar na tabela
+let dropdownTiposCache = [];
+let dropdownCategoriasCache = [];
+
+async function carregarDropdownData() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+    try {
+        const resp = await fetch("/api/transactions/dropdown-data", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            dropdownTiposCache = data.tipos || [];
+            dropdownCategoriasCache = data.categorias || [];
+        }
+    } catch (e) {
+        console.error("Erro ao carregar dropdown data:", e);
+    }
+}
+
+function getTiposOptions() {
+    if (dropdownTiposCache.length > 0) {
+        return dropdownTiposCache.map(t => t.nome);
+    }
+    return ["Receita", "Despesa"];
+}
+
+function getCategoriasOptions() {
+    if (dropdownCategoriasCache.length > 0) {
+        return dropdownCategoriasCache.map(c => c.nome);
+    }
+    // Fallback: usa settingsCategorias
+    if (settingsCategorias.length > 0) {
+        return settingsCategorias.map(c => c.nome);
+    }
+    return [];
+}
+
+function getCategoriasPorTipo(tipoNome) {
+    const cache = dropdownCategoriasCache.length > 0 ? dropdownCategoriasCache : settingsCategorias;
+    if (!cache.length || !tipoNome) return [];
+    return cache.filter(c => c.tipo_nome === tipoNome).map(c => c.nome);
+}
+
+function criarSelectCategoria(idxOriginal, tipoAtual, catAtual) {
+    const selectCat = document.createElement("select");
+    selectCat.className = "cell-select";
+    const categoriasFiltradas = getCategoriasPorTipo(tipoAtual);
+    const catsParaExibir = catAtual === "" ? ["", ...categoriasFiltradas] : categoriasFiltradas;
+    catsParaExibir.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat || "(Selecione)";
+        if (catAtual === cat) opt.selected = true;
+        selectCat.appendChild(opt);
+    });
+    // Se a categoria atual não está na lista filtrada (p.ex. veio do CSV), adiciona como opção
+    if (catAtual && !categoriasFiltradas.includes(catAtual)) {
+        const optManual = document.createElement("option");
+        optManual.value = catAtual;
+        optManual.textContent = catAtual;
+        optManual.selected = true;
+        selectCat.appendChild(optManual);
+    }
+    // Se não há categorias filtradas, exibe input text como fallback
+    if (categoriasFiltradas.length === 0 && !catAtual) {
+        const optVazio = document.createElement("option");
+        optVazio.value = "";
+        optVazio.textContent = "(Sem categorias)";
+        selectCat.appendChild(optVazio);
+    }
+    selectCat.addEventListener("change", (e) => {
+        dadosPivotados[idxOriginal].categoria = e.target.value.trim();
+        atualizarMetricas();
+        atualizarGraficos();
+    });
+    return selectCat;
+}
+
+function atualizarSelectCategoriaPorTipo(tr, idxOriginal, novoTipo, categoriaAtual) {
+    // Encontra a td da categoria (último td antes dos meses) e substitui o select
+    const tdCat = tr.querySelectorAll("td")[4]; // índice 4 = coluna Categoria (0=del,1=item,2=tipo,3=cat...)
+    if (!tdCat) return;
+    const novoSelect = criarSelectCategoria(idxOriginal, novoTipo, categoriaAtual);
+    tdCat.innerHTML = "";
+    tdCat.appendChild(novoSelect);
+}
+
 // Transforma a lista plana em formato pivotado estruturado
 function processarEPivotarDados(transacoes) {
     const mapa = {};
@@ -745,11 +882,18 @@ function processarEPivotarDados(transacoes) {
 
 // Popular seletor de Tipos no Detalhamento
 function popularSeletorTipoDetalhe() {
-    const tiposDisponiveis = [...new Set(dadosPivotados.map(d => d.tipo).filter(t => t.trim() !== ""))];
-    selectTipoDetalhe.innerHTML = "";
+    // Prioriza tipos do dropdown (cadastrados na tabela tipos)
+    let tiposDisponiveis = getTiposOptions();
     
+    // Se vazio, usa os tipos presentes nos dados pivotados
     if (tiposDisponiveis.length === 0) {
-        tiposDisponiveis.push("Receita", "Despesa", "Investimento", "Reserva");
+        tiposDisponiveis = [...new Set(dadosPivotados.map(d => d.tipo).filter(t => t.trim() !== ""))];
+    }
+    
+    selectTipoDetalhe.innerHTML = "";
+
+    if (tiposDisponiveis.length === 0) {
+        tiposDisponiveis.push("Receita", "Despesa");
     }
 
     tiposDisponiveis.forEach(tipo => {
@@ -767,12 +911,41 @@ function popularSeletorTipoDetalhe() {
     }
 }
 
+// Atualizar opções do filtro de Tipo com base nos dados carregados
+function atualizarFiltroTipoOpcoes() {
+    const selectFiltroTipo = document.getElementById("filter-tipo");
+    if (!selectFiltroTipo) return;
+
+    const tipos = getTiposOptions();
+    const valorAtual = filtroTipoAtivo;
+
+    selectFiltroTipo.innerHTML = '<option value="Todos">Todos</option>';
+    tipos.forEach(tp => {
+        const opt = document.createElement("option");
+        opt.value = tp;
+        opt.textContent = tp;
+        if (tp === valorAtual) opt.selected = true;
+        selectFiltroTipo.appendChild(opt);
+    });
+
+    if (!tipos.includes(valorAtual) && valorAtual !== "Todos") {
+        filtroTipoAtivo = "Todos";
+        selectFiltroTipo.value = "Todos";
+    }
+}
+
 // Atualizar opções do filtro de Categoria com base nos dados carregados
 function atualizarFiltroCategoriaOpcoes() {
     const selectFiltroCat = document.getElementById("filter-categoria");
     if (!selectFiltroCat) return;
     
-    const categorias = [...new Set(dadosPivotados.map(d => d.categoria).filter(c => c.trim() !== ""))];
+    // Prioriza categorias do dropdown (cadastradas na tabela categorias)
+    let categorias = getCategoriasOptions();
+    
+    // Se vazio, usa as categorias presentes nos dados pivotados
+    if (categorias.length === 0) {
+        categorias = [...new Set(dadosPivotados.map(d => d.categoria).filter(c => c.trim() !== ""))];
+    }
     
     selectFiltroCat.innerHTML = '<option value="Todas">Todas</option>';
     categorias.forEach(cat => {
@@ -937,16 +1110,17 @@ function renderizarTabelaEdicao() {
         tdItem.appendChild(inputItem);
         tr.appendChild(tdItem);
 
-        // Select Tipo
+        // Select Tipo (carregado dinamicamente dos tipos cadastrados)
         const tdTipo = document.createElement("td");
         const selectTp = document.createElement("select");
         selectTp.className = "cell-select";
-        // Permitir valor vazio se for linha nova
-        const tiposOpcoes = row.tipo === "" ? ["", "Receita", "Despesa", "Investimento", "Reserva"] : ["Receita", "Despesa", "Investimento", "Reserva"];
-        tiposOpcoes.forEach(tp => {
+        const tiposOpcoes = getTiposOptions();
+        // Se linha nova, permite valor vazio
+        const tiposParaExibir = row.tipo === "" ? ["", ...tiposOpcoes] : tiposOpcoes;
+        tiposParaExibir.forEach(tp => {
             const opt = document.createElement("option");
             opt.value = tp;
-            opt.textContent = tp;
+            opt.textContent = tp || "(Selecione)";
             if (row.tipo === tp) opt.selected = true;
             selectTp.appendChild(opt);
         });
@@ -959,9 +1133,10 @@ function renderizarTabelaEdicao() {
             tr.className = "";
             if (tipoLimpo === "receita") tr.className = "row-receita";
             else if (tipoLimpo === "despesa") tr.className = "row-despesa";
-            else if (tipoLimpo === "investimento") tr.className = "row-investimento";
-            else if (tipoLimpo === "reserva") tr.className = "row-reserva";
             else tr.className = "row-padrao";
+
+            // Recarrega as categorias do select filtradas pelo tipo selecionado
+            atualizarSelectCategoriaPorTipo(tr, idxOriginal, novoTipo, row.categoria);
 
             atualizarMetricas();
             popularSeletorTipoDetalhe();
@@ -970,18 +1145,10 @@ function renderizarTabelaEdicao() {
         tdTipo.appendChild(selectTp);
         tr.appendChild(tdTipo);
 
-        // Input Categoria
+        // Select Categoria (carregado dinamicamente das categorias cadastradas do usuário)
         const tdCat = document.createElement("td");
-        const inputCat = document.createElement("input");
-        inputCat.type = "text";
-        inputCat.className = "cell-input";
-        inputCat.value = row.categoria;
-        inputCat.addEventListener("change", (e) => {
-            dadosPivotados[idxOriginal].categoria = e.target.value.trim();
-            atualizarMetricas();
-            atualizarGraficos();
-        });
-        tdCat.appendChild(inputCat);
+        const selectCat = criarSelectCategoria(idxOriginal, row.tipo, row.categoria);
+        tdCat.appendChild(selectCat);
         tr.appendChild(tdCat);
 
         // Inputs dos meses
@@ -2128,11 +2295,636 @@ function colorForGroup(group) {
     return GROUP_COLORS[Math.abs(hash) % GROUP_COLORS.length];
 }
 
+// ===================================================================
+// Settings / Configurações (Tipos e Categorias)
+// ===================================================================
+
+// Variáveis de estado das configurações
+let settingsTipos = [];
+let settingsCategorias = [];
+let chartCategoriaComparativo = null;
+
+function initSettings() {
+    const btnAddTipo = document.getElementById("btn-settings-add-tipo");
+    const btnAddCategoria = document.getElementById("btn-settings-add-categoria");
+    if (btnAddTipo) btnAddTipo.addEventListener("click", handleAddTipo);
+    if (btnAddCategoria) btnAddCategoria.addEventListener("click", handleAddCategoria);
+}
+
+async function carregarSettings() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    try {
+        // Carrega tipos e categorias em paralelo
+        const [tiposResp, categoriasResp] = await Promise.all([
+            fetch("/api/settings/tipos", { headers: { "Authorization": `Bearer ${token}` } }),
+            fetch("/api/settings/categorias", { headers: { "Authorization": `Bearer ${token}` } })
+        ]);
+
+        if (tiposResp.ok) settingsTipos = await tiposResp.json();
+        if (categoriasResp.ok) settingsCategorias = await categoriasResp.json();
+
+        // Atualiza cache dos dropdowns da tabela
+        dropdownTiposCache = settingsTipos.map(t => ({ id: t.id, nome: t.nome }));
+        dropdownCategoriasCache = settingsCategorias.map(c => ({
+            id: c.id,
+            nome: c.nome,
+            tipo_id: c.tipo_id,
+            tipo_nome: c.tipo_nome,
+        }));
+
+        renderizarSettingsTipos();
+        renderizarSettingsCategorias();
+        popularSelectTipoCategoria();
+        atualizarFiltroTipoOpcoes();
+        atualizarFiltroCategoriaOpcoes();
+
+        // Atualiza o gráfico de categoria comparativo com as metas carregadas
+        atualizarGraficoCategoriaComparativo();
+    } catch (e) {
+        console.error("Erro ao carregar configurações:", e);
+    }
+}
+
+function renderizarSettingsTipos() {
+    const tbody = document.getElementById("settings-tipos-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (settingsTipos.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="5" style="text-align:center;color:var(--text-secondary);">Nenhum tipo cadastrado.</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+
+    settingsTipos.forEach(tipo => {
+        const tr = document.createElement("tr");
+        tr.dataset.tipoId = tipo.id;
+
+        const tdId = document.createElement("td");
+        tdId.textContent = tipo.id;
+        tr.appendChild(tdId);
+
+        const tdNome = document.createElement("td");
+        tdNome.className = "td-nome";
+        if (tipo.is_protegido) {
+            tdNome.innerHTML = `<span class="view-text">${escHtml(tipo.nome)}</span>`;
+        } else {
+            // Modo visualização: texto + botão editar (lápis)
+            tdNome.innerHTML = `
+                <div class="settings-view-mode" data-mode="view">
+                    <span class="view-text">${escHtml(tipo.nome)}</span>
+                    <button class="btn-edit settings-tipo-edit-trigger" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                </div>
+                <div class="settings-edit-mode hidden" data-mode="edit">
+                    <input type="text" class="edit-input settings-tipo-edit-nome" value="${escHtml(tipo.nome)}">
+                    <button class="btn btn-primary btn-xs settings-tipo-save" title="Salvar"><i class="fa-solid fa-check"></i></button>
+                    <button class="btn btn-secondary btn-xs settings-tipo-cancel" title="Cancelar"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            `;
+            // Botão Editar
+            const editTrigger = tdNome.querySelector(".settings-tipo-edit-trigger");
+            editTrigger.addEventListener("click", () => {
+                tdNome.querySelector('[data-mode="view"]').classList.add("hidden");
+                tdNome.querySelector('[data-mode="edit"]').classList.remove("hidden");
+                tdNome.querySelector(".settings-tipo-edit-nome").focus();
+            });
+            // Botão Salvar
+            const saveBtn = tdNome.querySelector(".settings-tipo-save");
+            saveBtn.addEventListener("click", async () => {
+                const input = tdNome.querySelector(".settings-tipo-edit-nome");
+                const novoNome = input.value.trim();
+                if (!novoNome) return alert("Nome não pode estar vazio.");
+                await atualizarTipo(tipo.id, novoNome);
+            });
+            // Botão Cancelar
+            const cancelBtn = tdNome.querySelector(".settings-tipo-cancel");
+            cancelBtn.addEventListener("click", () => {
+                tdNome.querySelector('[data-mode="view"]').classList.remove("hidden");
+                tdNome.querySelector('[data-mode="edit"]').classList.add("hidden");
+                tdNome.querySelector(".settings-tipo-edit-nome").value = tipo.nome;
+            });
+        }
+        tr.appendChild(tdNome);
+
+        const tdProt = document.createElement("td");
+        tdProt.innerHTML = tipo.is_protegido
+            ? '<span style="color:var(--color-receita);"><i class="fa-solid fa-lock"></i> Sim</span>'
+            : '<span style="color:var(--text-muted);"><i class="fa-solid fa-unlock"></i> Não</span>';
+        tr.appendChild(tdProt);
+
+        const tdAcoes = document.createElement("td");
+        if (!tipo.is_protegido) {
+            tdAcoes.innerHTML = `<button class="btn btn-danger-outline btn-xs settings-tipo-del" data-id="${tipo.id}" data-nome="${escHtml(tipo.nome)}"><i class="fa-solid fa-trash-can"></i></button>`;
+            const delBtn = tdAcoes.querySelector(".settings-tipo-del");
+            if (delBtn) {
+                delBtn.addEventListener("click", async () => {
+                    if (!confirm(`Remover tipo "${tipo.nome}"?`)) return;
+                    await removerTipo(tipo.id);
+                });
+            }
+        } else {
+            tdAcoes.innerHTML = '<span style="color:var(--text-muted);">—</span>';
+        }
+        tr.appendChild(tdAcoes);
+
+        tbody.appendChild(tr);
+    });
+}
+
+function renderizarSettingsCategorias() {
+    const tbody = document.getElementById("settings-categorias-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (settingsCategorias.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="6" style="text-align:center;color:var(--text-secondary);">Nenhuma categoria cadastrada.</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+
+    settingsCategorias.forEach(cat => {
+        const tr = document.createElement("tr");
+        tr.dataset.catId = cat.id;
+
+        const tdId = document.createElement("td");
+        tdId.textContent = cat.id;
+        tr.appendChild(tdId);
+
+        const tdTipo = document.createElement("td");
+        tdTipo.className = "td-tipo";
+        if (cat.is_protegido) {
+            tdTipo.innerHTML = `<span class="view-text">${escHtml(cat.tipo_nome || "—")}</span>`;
+        } else {
+            tdTipo.innerHTML = `
+                <div class="settings-view-mode" data-mode="view">
+                    <span class="view-text">${escHtml(cat.tipo_nome || "—")}</span>
+                    <button class="btn-edit settings-cat-edit-trigger" title="Editar"><i class="fa-solid fa-pencil"></i></button>
+                </div>
+                <div class="settings-edit-mode hidden" data-mode="edit">
+                    <select class="edit-select settings-cat-edit-tipo"></select>
+                    <input type="text" class="edit-input settings-cat-edit-nome" value="${escHtml(cat.nome)}">
+                    <input type="number" class="edit-input settings-cat-edit-valor" value="${cat.valor}" step="0.01" style="max-width:120px;">
+                    <button class="btn btn-primary btn-xs settings-cat-save" title="Salvar"><i class="fa-solid fa-check"></i></button>
+                    <button class="btn btn-secondary btn-xs settings-cat-cancel" title="Cancelar"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            `;
+            // Preenche select de tipos
+            const selectTipo = tdTipo.querySelector(".settings-cat-edit-tipo");
+            settingsTipos.forEach(tp => {
+                const opt = document.createElement("option");
+                opt.value = tp.id;
+                opt.textContent = tp.nome;
+                if (tp.id === cat.tipo_id) opt.selected = true;
+                selectTipo.appendChild(opt);
+            });
+            // Botão Editar
+            const editTrigger = tdTipo.querySelector(".settings-cat-edit-trigger");
+            editTrigger.addEventListener("click", () => {
+                tdTipo.querySelector('[data-mode="view"]').classList.add("hidden");
+                tdTipo.querySelector('[data-mode="edit"]').classList.remove("hidden");
+                tdTipo.querySelector(".settings-cat-edit-nome").focus();
+            });
+            // Botão Salvar
+            const saveBtn = tdTipo.querySelector(".settings-cat-save");
+            saveBtn.addEventListener("click", async () => {
+                const nomeInput = tdTipo.querySelector(".settings-cat-edit-nome");
+                const valorInput = tdTipo.querySelector(".settings-cat-edit-valor");
+                const tipoSelect = tdTipo.querySelector(".settings-cat-edit-tipo");
+                const novoNome = nomeInput.value.trim();
+                const novoValor = parseFloat(valorInput.value) || 0.0;
+                const novoTipoId = parseInt(tipoSelect.value);
+                if (!novoNome) return alert("Nome não pode estar vazio.");
+                if (!novoTipoId) return alert("Selecione um tipo.");
+                await atualizarCategoria(cat.id, novoNome, novoValor, novoTipoId);
+            });
+            // Botão Cancelar
+            const cancelBtn = tdTipo.querySelector(".settings-cat-cancel");
+            cancelBtn.addEventListener("click", () => {
+                tdTipo.querySelector('[data-mode="view"]').classList.remove("hidden");
+                tdTipo.querySelector('[data-mode="edit"]').classList.add("hidden");
+            });
+        }
+        tr.appendChild(tdTipo);
+
+        // Coluna Nome (apenas visualização, pois edição está junto do tipo)
+        const tdNome = document.createElement("td");
+        tdNome.className = "td-nome";
+        tdNome.textContent = cat.nome;
+        tr.appendChild(tdNome);
+
+        const tdValor = document.createElement("td");
+        tdValor.className = "td-valor";
+        tdValor.textContent = formatarMoeda(cat.valor);
+        tr.appendChild(tdValor);
+
+        const tdProt = document.createElement("td");
+        tdProt.innerHTML = cat.is_protegido
+            ? '<span style="color:var(--color-receita);"><i class="fa-solid fa-lock"></i> Sim</span>'
+            : '<span style="color:var(--text-muted);"><i class="fa-solid fa-unlock"></i> Não</span>';
+        tr.appendChild(tdProt);
+
+        const tdAcoes = document.createElement("td");
+        if (!cat.is_protegido) {
+            tdAcoes.innerHTML = `<button class="btn btn-danger-outline btn-xs settings-cat-del" data-id="${cat.id}"><i class="fa-solid fa-trash-can"></i></button>`;
+            const delBtn = tdAcoes.querySelector(".settings-cat-del");
+            if (delBtn) {
+                delBtn.addEventListener("click", async () => {
+                    if (!confirm(`Remover categoria "${cat.nome}"?`)) return;
+                    await removerCategoria(cat.id);
+                });
+            }
+        } else {
+            tdAcoes.innerHTML = '<span style="color:var(--text-muted);">—</span>';
+        }
+        tr.appendChild(tdAcoes);
+
+        tbody.appendChild(tr);
+    });
+}
+
+// Utilitário para escapar HTML
+function escHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function popularSelectTipoCategoria() {
+    const select = document.getElementById("settings-cat-tipo");
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">Selecione...</option>';
+    settingsTipos.forEach(tipo => {
+        const opt = document.createElement("option");
+        opt.value = tipo.id;
+        opt.textContent = tipo.nome;
+        if (tipo.id == currentVal) opt.selected = true;
+        select.appendChild(opt);
+    });
+}
+
+async function handleAddTipo() {
+    const input = document.getElementById("settings-tipo-nome");
+    const nome = input.value.trim();
+    if (!nome) return alert("Informe o nome do tipo.");
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    try {
+        const resp = await fetch("/api/settings/tipos", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ nome })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            alert(data.detail || "Erro ao criar tipo.");
+            return;
+        }
+        input.value = "";
+        await carregarSettings();
+        popularSeletorTipoDetalhe();
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão.");
+    }
+}
+
+async function atualizarTipo(id, nome) {
+    const token = obterCookie("session_token");
+    try {
+        const resp = await fetch(`/api/settings/tipos/${id}`, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ nome })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            alert(data.detail || "Erro ao atualizar tipo.");
+            return;
+        }
+        await carregarSettings();
+        popularSeletorTipoDetalhe();
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão.");
+    }
+}
+
+async function removerTipo(id) {
+    const token = obterCookie("session_token");
+    try {
+        const resp = await fetch(`/api/settings/tipos/${id}`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            alert(data.detail || "Erro ao remover tipo.");
+            return;
+        }
+        await carregarSettings();
+        popularSeletorTipoDetalhe();
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão.");
+    }
+}
+
+async function handleAddCategoria() {
+    const nomeInput = document.getElementById("settings-cat-nome");
+    const valorInput = document.getElementById("settings-cat-valor");
+    const tipoSelect = document.getElementById("settings-cat-tipo");
+    const nome = nomeInput.value.trim();
+    const valor = parseFloat(valorInput.value) || 0.0;
+    const tipo_id = parseInt(tipoSelect.value);
+
+    if (!nome) return alert("Informe o nome da categoria.");
+    if (!tipo_id) return alert("Selecione um tipo.");
+    const token = obterCookie("session_token");
+
+    try {
+        const resp = await fetch("/api/settings/categorias", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ nome, valor, tipo_id })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            alert(data.detail || "Erro ao criar categoria.");
+            return;
+        }
+        nomeInput.value = "";
+        valorInput.value = "0.00";
+        await carregarSettings();
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão.");
+    }
+}
+
+async function atualizarCategoria(id, nome, valor, tipo_id) {
+    const token = obterCookie("session_token");
+    try {
+        const resp = await fetch(`/api/settings/categorias/${id}`, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ nome, valor, tipo_id })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            alert(data.detail || "Erro ao atualizar categoria.");
+            return;
+        }
+        await carregarSettings();
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão.");
+    }
+}
+
+async function removerCategoria(id) {
+    const token = obterCookie("session_token");
+    try {
+        const resp = await fetch(`/api/settings/categorias/${id}`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            alert(data.detail || "Erro ao remover categoria.");
+            return;
+        }
+        await carregarSettings();
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão.");
+    }
+}
+
+// ===================================================================
+// Gráfico: Comportamento de Categorias (Não Receita vs Remuneração)
+// ===================================================================
+
+// Calcula os dados do gráfico de categoria comparativo a partir dos dados locais
+function calcularDadosCategoriaComparativo() {
+    const categoriasMap = {};
+    let remuneracaoTotal = 0;
+    const numMesFiltrado = MAPA_REVERSO_MES[mesFiltrado] || null;
+
+    // Percorre dadosPivotados para somar por categoria
+    dadosPivotados.forEach(row => {
+        const tipo = row.tipo.trim().toLowerCase();
+        const categoria = row.categoria.trim();
+        if (!categoria) return;
+
+        for (let m = 1; m <= 12; m++) {
+            // Filtro por mês
+            if (numMesFiltrado !== null && m !== numMesFiltrado) continue;
+
+            const dadosMes = row.meses[m] || { valor: null, pago: false };
+            const valor = parseFloat(dadosMes.valor) || 0;
+            const pago = boolValue(dadosMes.pago);
+
+            // Filtro "apenas efetivados"
+            if (apenasPagosDetalhe && !pago) continue;
+
+            if (tipo === "receita" && categoria.toLowerCase() === "remuneração") {
+                remuneracaoTotal += valor;
+            } else if (tipo !== "receita") {
+                if (!categoriasMap[categoria]) {
+                    categoriasMap[categoria] = 0;
+                }
+                categoriasMap[categoria] += valor;
+            }
+        }
+    });
+
+    // Mapa de metas das categorias cadastradas
+    const mapaMetas = {};
+    settingsCategorias.forEach(cat => {
+        mapaMetas[cat.nome.toLowerCase()] = cat.valor;
+    });
+
+    const categories = Object.entries(categoriasMap)
+        .sort((a, b) => b[1] - a[1])
+        .map(([catName, catValor]) => {
+            const meta = mapaMetas[catName.toLowerCase()] || 0;
+            const valorPercentual = remuneracaoTotal > 0 ? (catValor / remuneracaoTotal) * 100 : 0;
+            const desvio = meta > 0 ? ((valorPercentual - meta) / meta) * 100 : 0;
+            return {
+                categoria: catName,
+                valor: catValor,
+                valor_percentual_remuneracao: valorPercentual,
+                meta: meta,
+                desvio: desvio,
+            };
+        });
+
+    return {
+        categories: categories,
+        remuneracao_total: remuneracaoTotal,
+        meta_total: settingsCategorias.reduce((sum, c) => sum + c.valor, 0),
+    };
+}
+
+function atualizarGraficoCategoriaComparativo() {
+    const canvas = document.getElementById("chart-categoria-comparativo");
+    if (!canvas) return;
+
+    const data = calcularDadosCategoriaComparativo();
+    renderGraficoCategoriaComparativo(canvas, data);
+}
+
+function renderGraficoCategoriaComparativo(canvas, data) {
+    const ctx = canvas.getContext("2d");
+    const categories = data.categories || [];
+    const remuneracaoTotal = data.remuneracao_total || 0;
+    const metaTotal = data.meta_total || 0;
+
+    if (chartCategoriaComparativo) {
+        chartCategoriaComparativo.destroy();
+    }
+
+    if (categories.length === 0) {
+        chartCategoriaComparativo = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: ["Sem dados"],
+                datasets: [{
+                    label: "Desvio (%)",
+                    data: [0],
+                    backgroundColor: "rgba(128, 128, 128, 0.3)"
+                }]
+            },
+            options: {
+                indexAxis: "y",
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                },
+                scales: {
+                    x: {
+                        grid: { color: "rgba(128, 128, 128, 0.15)" },
+                        ticks: {
+                            color: corTextoSecundarioTema(),
+                            font: { family: "Outfit" },
+                            callback: function(value) {
+                                return value.toFixed(1) + "%";
+                            }
+                        }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: {
+                            color: corTextoSecundarioTema(),
+                            font: { family: "Outfit" }
+                        }
+                    }
+                }
+            }
+        });
+        return;
+    }
+
+    const labels = categories.map(c => c.categoria);
+    const desvios = categories.map(c => c.desvio || 0);
+    const cores = categories.map(c => {
+        const d = c.desvio || 0;
+        return d < 0 ? "rgba(46, 204, 113, 0.7)" : "rgba(231, 76, 60, 0.7)";
+    });
+    const bordas = categories.map(c => {
+        const d = c.desvio || 0;
+        return d < 0 ? "rgba(46, 204, 113, 1)" : "rgba(231, 76, 60, 1)";
+    });
+    // Guarda dados das categorias para usar no tooltip
+    const categoriasMap = {};
+    categories.forEach(c => { categoriasMap[c.categoria] = c; });
+
+    chartCategoriaComparativo = new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "Desvio da Meta",
+                data: desvios,
+                backgroundColor: cores,
+                borderColor: bordas,
+                borderWidth: 1,
+                borderRadius: 3
+            }]
+        },
+        options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const catLabel = context.label;
+                            const cat = categoriasMap[catLabel];
+                            if (!cat) return "";
+                            const desvio = cat.desvio || 0;
+                            const meta = cat.meta || 0;
+                            const valorCategoria = cat.valor || 0;
+                            const valorPercentual = cat.valor_percentual_remuneracao || 0;
+                            const lines = [];
+                            lines.push(` Desvio: ${desvio >= 0 ? '+' : ''}${desvio.toFixed(1)}%`);
+                            lines.push(` Meta: ${meta.toFixed(1)}%`);
+                            lines.push(` Total da Categoria: ${formatarMoeda(valorCategoria)} (${valorPercentual.toFixed(1)}%)`);
+                            return lines;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: "rgba(128, 128, 128, 0.15)" },
+                    ticks: {
+                        color: corTextoSecundarioTema(),
+                        font: { family: "Outfit" },
+                        callback: function(value) {
+                            return (value >= 0 ? "+" : "") + value.toFixed(1) + "%";
+                        }
+                    }
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: {
+                        color: corTextoTema(),
+                        font: { family: "Outfit", size: 12 }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Hook para carregar o gráfico comparativo junto com os outros dados
+const originalAtualizarGraficos = atualizarGraficos;
+atualizarGraficos = function() {
+    originalAtualizarGraficos();
+    atualizarGraficoCategoriaComparativo();
+};
+
 // --- Inicialização unificada ---
 document.addEventListener("DOMContentLoaded", () => {
     inicializarTema();
     inicializarSeletores();
     configurarEventListeners();
     initInvestments();
+    initSettings();
     verificarAutenticacao();
 });

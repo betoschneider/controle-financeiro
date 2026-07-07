@@ -251,6 +251,53 @@ def upload_csv(
 
     user = get_user_by_username(db, username)
     if user:
+        from app.models import Tipo, Categoria
+
+        # Carregar tipos existentes
+        tipos_existentes = {t.nome.strip().lower(): t for t in db.query(Tipo).all()}
+
+        # Carregar categorias existentes do usuário
+        categorias_existentes = {
+            c.nome.strip().lower(): c
+            for c in db.query(Categoria).filter(Categoria.owner_id == user.id).all()
+        }
+
+        # Iterar sobre novas transações para criar tipos e categorias que faltam
+        for tx in novas_transacoes:
+            tipo_nome = tx.tipo.strip()
+            cat_nome = tx.categoria.strip()
+
+            if not tipo_nome or not cat_nome:
+                continue
+
+            tipo_lower = tipo_nome.lower()
+            cat_lower = cat_nome.lower()
+
+            # Garantir existência do Tipo
+            if tipo_lower not in tipos_existentes:
+                novo_tipo = Tipo(nome=tipo_nome, is_protegido=False)
+                db.add(novo_tipo)
+                db.commit()
+                db.refresh(novo_tipo)
+                tipos_existentes[tipo_lower] = novo_tipo
+
+            tipo_obj = tipos_existentes[tipo_lower]
+
+            # Garantir existência da Categoria (com valor float default 0.0)
+            if cat_lower not in categorias_existentes:
+                nova_cat = Categoria(
+                    nome=cat_nome,
+                    valor=0.0,
+                    tipo_id=tipo_obj.id,
+                    owner_id=user.id,
+                    is_protegido=False
+                )
+                db.add(nova_cat)
+                db.commit()
+                db.refresh(nova_cat)
+                categorias_existentes[cat_lower] = nova_cat
+
+        # Salvar as transações
         db.query(Transacao).filter(Transacao.owner_id == user.id).delete()
         for tx in novas_transacoes:
             tx.owner_id = user.id
@@ -261,4 +308,136 @@ def upload_csv(
         "success": True,
         "count": len(novas_transacoes),
         "message": f"{len(novas_transacoes)} lançamentos importados com sucesso.",
+    }
+
+
+# --- Dashboard Endpoints ---
+
+from app.models import Categoria as CategoriaModel, Tipo as TipoModel
+
+
+@router.get("/dashboard/categoria-comparativo")
+def get_categoria_comparativo(
+    ano: int,
+    mes: Optional[str] = "Ano Completo",
+    db: Session = Depends(get_db),
+    username: str = Depends(verificar_autenticacao),
+):
+    """
+    Gráfico de comportamento de categorias:
+    Mostra para cada categoria (onde tipo != 'Receita'):
+      - Percentual que representa do total de Remuneração
+      - Desvio da meta (coluna Valor da tabela Categorias)
+    """
+    from collections import defaultdict
+
+    user = get_user_by_username(db, username)
+    if not user:
+        return {"categories": [], "remuneracao_total": 0, "meta_total": 0}
+
+    # Carrega transações filtradas por ano (e mês se não for "Ano Completo")
+    query = db.query(Transacao).filter(
+        Transacao.ano == ano,
+        Transacao.owner_id == user.id,
+    )
+    if mes and mes != "Ano Completo":
+        mapa_meses = {
+            "Jan": 1, "Fev": 2, "Mar": 3, "Abr": 4, "Mai": 5, "Jun": 6,
+            "Jul": 7, "Ago": 8, "Set": 9, "Out": 10, "Nov": 11, "Dez": 12
+        }
+        mes_num = mapa_meses.get(mes)
+        if mes_num:
+            query = query.filter(Transacao.mes == mes_num)
+
+    transacoes = query.all()
+
+    # Carrega categorias cadastradas do usuário com suas metas
+    categorias_cadastradas = db.query(CategoriaModel).filter(
+        CategoriaModel.owner_id == user.id
+    ).all()
+    mapa_metas = {cat.nome.lower(): cat.valor for cat in categorias_cadastradas}
+
+    # Soma os valores das categorias do tipo não-Receita
+    categorias_nao_receita = defaultdict(float)
+    remuneracao_total = 0.0
+
+    for t in transacoes:
+        valor = float(t.valor or 0)
+        if t.tipo.strip().lower() != "receita":
+            cat_key = t.categoria.strip() or "Sem Categoria"
+            categorias_nao_receita[cat_key] += valor
+        elif t.categoria.strip().lower() == "remuneração":
+            remuneracao_total += valor
+
+    result_data = []
+    meta_total = sum(mapa_metas.values())
+
+    for cat_nome, cat_valor in sorted(categorias_nao_receita.items(), key=lambda x: x[1], reverse=True):
+        meta = mapa_metas.get(cat_nome.lower(), 0.0)
+
+        # Representação da categoria em % do total de Remuneração
+        if remuneracao_total > 0:
+            valor_percentual_remuneracao = (cat_valor / remuneracao_total) * 100
+        else:
+            valor_percentual_remuneracao = 0.0
+
+        # Desvio do planejado (percentual da meta)
+        # Ex: meta = 10%, valor_percentual_remuneracao = 13%.
+        # Desvio = ((13 - 10) / 10) * 100 = 30%.
+        if meta > 0:
+            desvio = ((valor_percentual_remuneracao - meta) / meta) * 100
+        else:
+            desvio = 0.0
+
+        result_data.append({
+            "categoria": cat_nome,
+            "valor": round(cat_valor, 2),
+            "percentual_nao_receita": 0.0, # Mantido para evitar quebra de contratos de API antigos
+            "valor_percentual_remuneracao": round(valor_percentual_remuneracao, 2),
+            "meta": round(meta, 2),
+            "desvio": round(desvio, 2),
+            "desvio_percentual": round(desvio, 2),
+        })
+
+    return {
+        "categories": result_data,
+        "remuneracao_total": round(remuneracao_total, 2),
+        "total_nao_receita": round(sum(categorias_nao_receita.values()), 2),
+        "meta_total": round(meta_total, 2),
+    }
+
+
+@router.get("/dropdown-data")
+def get_dropdown_data(
+    db: Session = Depends(get_db),
+    username: str = Depends(verificar_autenticacao),
+):
+    """
+    Retorna os tipos e categorias para alimentar os dropdowns da tabela de lançamentos.
+    """
+    user = get_user_by_username(db, username)
+    if not user:
+        return {"tipos": [], "categorias": []}
+
+    # Garantir que tipos padrão existam
+    from app.settings import seed_default_tipos, seed_default_categoria
+    seed_default_tipos(db)
+    seed_default_categoria(db, user)
+
+    tipos = db.query(TipoModel).order_by(TipoModel.id).all()
+    categorias = db.query(CategoriaModel).filter(
+        CategoriaModel.owner_id == user.id
+    ).order_by(CategoriaModel.id).all()
+
+    return {
+        "tipos": [{"id": t.id, "nome": t.nome} for t in tipos],
+        "categorias": [
+            {
+                "id": c.id,
+                "nome": c.nome,
+                "tipo_id": c.tipo_id,
+                "tipo_nome": next((t.nome for t in tipos if t.id == c.tipo_id), None),
+            }
+            for c in categorias
+        ],
     }

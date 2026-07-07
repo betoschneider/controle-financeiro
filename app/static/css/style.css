@@ -427,8 +427,68 @@ body {
     display: flex;
 }
 
-body.investment-mode .financial-only {
+body.investment-mode .financial-only,
+body.settings-mode .financial-only {
     display: none !important;
+}
+
+/* Settings: aumentar tamanho dos inputs */
+.settings-form input[type="text"],
+.settings-form input[type="number"],
+.settings-form select {
+    font-size: 15px !important;
+    padding: 10px 14px !important;
+}
+
+/* Settings: botão Editar com lápis */
+.btn-edit {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition-fast);
+}
+
+.btn-edit:hover {
+    color: var(--primary-color);
+    background-color: rgba(108, 92, 231, 0.1);
+}
+
+/* Settings: modo de visualização vs edição */
+.settings-view-mode {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.settings-view-mode .view-text {
+    flex: 1;
+}
+
+.settings-edit-mode {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.settings-edit-mode .edit-input {
+    flex: 1;
+}
+
+.settings-edit-mode .edit-select {
+    flex: 1;
+    min-width: 100px;
+}
+
+/* Settings: dados de visualização em linha */
+.settings-value-display {
+    font-variant-numeric: tabular-nums;
 }
 
 /* Table Section & Table Actions */
@@ -1104,6 +1164,110 @@ body.light-theme .row-reserva .cell-select {
     100% {
         transform: rotate(360deg);
     }
+}
+
+/* Configurações (Settings) */
+.settings-container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.settings-container > h2 {
+    font-size: 22px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-card {
+    padding: 20px;
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.settings-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.settings-form input[type="text"],
+.settings-form input[type="number"] {
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: var(--transition-fast);
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.settings-form input[type="text"]:focus,
+.settings-form input[type="number"]:focus {
+    border-color: var(--primary-color);
+}
+
+.settings-table-wrap {
+    max-height: 360px;
+}
+
+.settings-table th,
+.settings-table td {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.settings-table td .btn-xs {
+    margin-right: 4px;
+}
+
+.settings-edit-inline {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.settings-edit-inline input,
+.settings-edit-inline select {
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+    width: 100%;
+}
+
+.settings-cat-edit-nome {
+    min-width: 180px;
+}
+
+.settings-edit-inline input:focus,
+.settings-edit-inline select:focus {
+    border-color: var(--primary-color);
+}
+
+.settings-edit-inline .btn {
+    padding: 4px 10px;
+    font-size: 12px;
 }
 
 /* Responsividade Básica */
