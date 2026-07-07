@@ -272,6 +272,7 @@ async function autenticarViaGoogle(id_token) {
         if (resp.ok) {
             // Assume backend set cookie; close modal and reload data
             authModal.classList.remove('active');
+            atualizarVisibilidadeBotaoConfig();
             carregarDadosDoAno();
         } else {
             alert(data.detail || 'Falha no login via Google.');
@@ -383,6 +384,7 @@ async function realizarLoginStep2() {
             document.getElementById("login-password").value = "";
             document.getElementById("login-otp").value = "";
             
+            atualizarVisibilidadeBotaoConfig();
             carregarDadosDoAno();
         } else {
             errorEl.textContent = data.detail || "Código de autenticação inválido.";
@@ -803,11 +805,32 @@ function getCategoriasPorTipo(tipoNome) {
     return cache.filter(c => c.tipo_nome === tipoNome).map(c => c.nome);
 }
 
-function criarSelectCategoria(idxOriginal, tipoAtual, catAtual) {
+// Função auxiliar: obtém nome do tipo a partir do nome de uma categoria
+function getTipoNomeFromCategoria(catNome) {
+    const cat = settingsCategorias.find(c => c.nome.toLowerCase() === (catNome || "").toLowerCase());
+    if (cat && cat.tipo_nome) return cat.tipo_nome;
+    const cached = dropdownCategoriasCache.find(c => c.nome.toLowerCase() === (catNome || "").toLowerCase());
+    if (cached && cached.tipo_nome) return cached.tipo_nome;
+    return "";
+}
+
+// Função auxiliar: deriva o tipo de um row (ou usa o armazenado)
+function getTipoFromRow(row) {
+    if (row._tipo && row._tipo.trim()) return row._tipo.trim();
+    if (row.categoria && row.categoria.trim()) {
+        const derivado = getTipoNomeFromCategoria(row.categoria);
+        if (derivado) return derivado;
+    }
+    return row.tipo || "";
+}
+
+// Cria select de categoria com TODAS as categorias (sem filtrar por tipo)
+function criarSelectCategoria(idxOriginal, catAtual) {
     const selectCat = document.createElement("select");
     selectCat.className = "cell-select";
-    const categoriasFiltradas = getCategoriasPorTipo(tipoAtual);
-    const catsParaExibir = catAtual === "" ? ["", ...categoriasFiltradas] : categoriasFiltradas;
+    const todasCategorias = getCategoriasOptions();
+    // Se linha nova, inclui opção vazia
+    const catsParaExibir = catAtual === "" ? ["", ...todasCategorias] : todasCategorias;
     catsParaExibir.forEach(cat => {
         const opt = document.createElement("option");
         opt.value = cat;
@@ -815,36 +838,32 @@ function criarSelectCategoria(idxOriginal, tipoAtual, catAtual) {
         if (catAtual === cat) opt.selected = true;
         selectCat.appendChild(opt);
     });
-    // Se a categoria atual não está na lista filtrada (p.ex. veio do CSV), adiciona como opção
-    if (catAtual && !categoriasFiltradas.includes(catAtual)) {
+    // Se a categoria atual não está na lista (ex: veio do CSV), adiciona
+    if (catAtual && !todasCategorias.includes(catAtual)) {
         const optManual = document.createElement("option");
         optManual.value = catAtual;
         optManual.textContent = catAtual;
         optManual.selected = true;
         selectCat.appendChild(optManual);
     }
-    // Se não há categorias filtradas, exibe input text como fallback
-    if (categoriasFiltradas.length === 0 && !catAtual) {
+    if (todasCategorias.length === 0 && !catAtual) {
         const optVazio = document.createElement("option");
         optVazio.value = "";
         optVazio.textContent = "(Sem categorias)";
         selectCat.appendChild(optVazio);
     }
     selectCat.addEventListener("change", (e) => {
-        dadosPivotados[idxOriginal].categoria = e.target.value.trim();
+        const novaCategoria = e.target.value.trim();
+        dadosPivotados[idxOriginal].categoria = novaCategoria;
+        // Deriva o tipo a partir da categoria selecionada
+        const novoTipo = getTipoNomeFromCategoria(novaCategoria);
+        dadosPivotados[idxOriginal]._tipo = novoTipo;
+        // Garante que o tipo original também é atualizado
+        dadosPivotados[idxOriginal].tipo = novoTipo || dadosPivotados[idxOriginal].tipo || "";
         atualizarMetricas();
         atualizarGraficos();
     });
     return selectCat;
-}
-
-function atualizarSelectCategoriaPorTipo(tr, idxOriginal, novoTipo, categoriaAtual) {
-    // Encontra a td da categoria (último td antes dos meses) e substitui o select
-    const tdCat = tr.querySelectorAll("td")[4]; // índice 4 = coluna Categoria (0=del,1=item,2=tipo,3=cat...)
-    if (!tdCat) return;
-    const novoSelect = criarSelectCategoria(idxOriginal, novoTipo, categoriaAtual);
-    tdCat.innerHTML = "";
-    tdCat.appendChild(novoSelect);
 }
 
 // Transforma a lista plana em formato pivotado estruturado
@@ -856,10 +875,13 @@ function processarEPivotarDados(transacoes) {
         const chave = `${t.item.trim()}|||${t.tipo.trim()}|||${t.categoria.trim()}`;
         
         if (!mapa[chave]) {
+            const cat = t.categoria.trim();
+            const tipoDerivado = getTipoNomeFromCategoria(cat) || t.tipo.trim();
             mapa[chave] = {
                 item: t.item.trim(),
                 tipo: t.tipo.trim(),
-                categoria: t.categoria.trim(),
+                _tipo: tipoDerivado,
+                categoria: cat,
                 meses: {}
             };
             // Inicializa todos os 12 meses zerados
@@ -885,9 +907,9 @@ function popularSeletorTipoDetalhe() {
     // Prioriza tipos do dropdown (cadastrados na tabela tipos)
     let tiposDisponiveis = getTiposOptions();
     
-    // Se vazio, usa os tipos presentes nos dados pivotados
+    // Se vazio, usa os tipos derivados das categorias nos dados pivotados
     if (tiposDisponiveis.length === 0) {
-        tiposDisponiveis = [...new Set(dadosPivotados.map(d => d.tipo).filter(t => t.trim() !== ""))];
+        tiposDisponiveis = [...new Set(dadosPivotados.map(d => getTipoFromRow(d)).filter(t => t.trim() !== ""))];
     }
     
     selectTipoDetalhe.innerHTML = "";
@@ -991,13 +1013,9 @@ function renderizarTabelaEdicao() {
     thItem.textContent = "Item";
     headerRow.appendChild(thItem);
 
-    const thTipo = document.createElement("th");
-    thTipo.textContent = "Tipo";
-    thTipo.style.width = "130px";
-    headerRow.appendChild(thTipo);
-
     const thCategoria = document.createElement("th");
     thCategoria.textContent = "Categoria";
+    thCategoria.style.width = "200px";
     headerRow.appendChild(thCategoria);
 
     // Colunas de meses filtrados
@@ -1039,11 +1057,10 @@ function renderizarTabelaEdicao() {
         if (a.isNew && !b.isNew) return -1;
         if (!a.isNew && b.isNew) return 1;
 
-        // Tipo desc (Receita vem antes de Despesa se compararmos texto ou priorizarmos. No original: 'Tipo' descending)
-        // No original: Receita, Despesa, Investimento, Reserva
+        // Tipo desc (usando tipo derivado da categoria)
         const prioridadeTipo = { "Receita": 4, "Despesa": 3, "Investimento": 2, "Reserva": 1 };
-        const pA = prioridadeTipo[a.tipo] || 0;
-        const pB = prioridadeTipo[b.tipo] || 0;
+        const pA = prioridadeTipo[getTipoFromRow(a)] || 0;
+        const pB = prioridadeTipo[getTipoFromRow(b)] || 0;
         if (pA !== pB) return pB - pA; // Descending
 
         // Pago do mês atual asc
@@ -1068,7 +1085,8 @@ function renderizarTabelaEdicao() {
     });
 
     const dadosFiltrados = dadosOrdenados.filter(row => {
-        const matchTipo = filtroTipoAtivo === "Todos" || row.tipo === filtroTipoAtivo;
+        const tipoRow = getTipoFromRow(row);
+        const matchTipo = filtroTipoAtivo === "Todos" || tipoRow === filtroTipoAtivo;
         const matchCategoria = filtroCategoriaAtiva === "Todas" || row.categoria === filtroCategoriaAtiva;
         return matchTipo && matchCategoria;
     });
@@ -1080,12 +1098,12 @@ function renderizarTabelaEdicao() {
         
         const tr = document.createElement("tr");
 
-        // Aplica classe de cor baseada no Tipo (igual à visualização colorida)
-        const tipoLimpo = row.tipo.trim().toLowerCase();
-        if (tipoLimpo === "receita") tr.className = "row-receita";
-        else if (tipoLimpo === "despesa") tr.className = "row-despesa";
-        else if (tipoLimpo === "investimento") tr.className = "row-investimento";
-        else if (tipoLimpo === "reserva") tr.className = "row-reserva";
+        // Aplica classe de cor baseada no Tipo derivado da categoria
+        const tipoDerivado = getTipoFromRow(row).toLowerCase();
+        if (tipoDerivado === "receita") tr.className = "row-receita";
+        else if (tipoDerivado === "despesa") tr.className = "row-despesa";
+        else if (tipoDerivado === "investimento") tr.className = "row-investimento";
+        else if (tipoDerivado === "reserva") tr.className = "row-reserva";
         else tr.className = "row-padrao";
 
         // Botão Deletar
@@ -1110,44 +1128,9 @@ function renderizarTabelaEdicao() {
         tdItem.appendChild(inputItem);
         tr.appendChild(tdItem);
 
-        // Select Tipo (carregado dinamicamente dos tipos cadastrados)
-        const tdTipo = document.createElement("td");
-        const selectTp = document.createElement("select");
-        selectTp.className = "cell-select";
-        const tiposOpcoes = getTiposOptions();
-        // Se linha nova, permite valor vazio
-        const tiposParaExibir = row.tipo === "" ? ["", ...tiposOpcoes] : tiposOpcoes;
-        tiposParaExibir.forEach(tp => {
-            const opt = document.createElement("option");
-            opt.value = tp;
-            opt.textContent = tp || "(Selecione)";
-            if (row.tipo === tp) opt.selected = true;
-            selectTp.appendChild(opt);
-        });
-        selectTp.addEventListener("change", (e) => {
-            const novoTipo = e.target.value;
-            dadosPivotados[idxOriginal].tipo = novoTipo;
-            
-            // Atualiza cor de fundo da linha imediatamente
-            const tipoLimpo = novoTipo.trim().toLowerCase();
-            tr.className = "";
-            if (tipoLimpo === "receita") tr.className = "row-receita";
-            else if (tipoLimpo === "despesa") tr.className = "row-despesa";
-            else tr.className = "row-padrao";
-
-            // Recarrega as categorias do select filtradas pelo tipo selecionado
-            atualizarSelectCategoriaPorTipo(tr, idxOriginal, novoTipo, row.categoria);
-
-            atualizarMetricas();
-            popularSeletorTipoDetalhe();
-            atualizarGraficos();
-        });
-        tdTipo.appendChild(selectTp);
-        tr.appendChild(tdTipo);
-
-        // Select Categoria (carregado dinamicamente das categorias cadastradas do usuário)
+        // Select Categoria (TODAS as categorias, sem filtrar por tipo)
         const tdCat = document.createElement("td");
-        const selectCat = criarSelectCategoria(idxOriginal, row.tipo, row.categoria);
+        const selectCat = criarSelectCategoria(idxOriginal, row.categoria);
         tdCat.appendChild(selectCat);
         tr.appendChild(tdCat);
 
@@ -1205,6 +1188,7 @@ function adicionarLinha() {
     const novaLinha = {
         item: "",
         tipo: "",
+        _tipo: "",
         categoria: "",
         meses: {},
         isNew: true
@@ -1296,7 +1280,7 @@ function atualizarMetricas() {
         const dadosMes = row.meses[numMesAlvo] || { valor: 0.0, pago: false };
         const valor = parseFloat(dadosMes.valor) || 0.0;
         const pago = boolValue(dadosMes.pago);
-        const tipo = row.tipo.trim().toLowerCase();
+        const tipo = getTipoFromRow(row).toLowerCase();
 
         if (pago) {
             if (tipo === "receita") totalReceitaAtual += valor;
@@ -1358,7 +1342,7 @@ function atualizarMetricas() {
     let anoReceitaEfet = 0, anoNaoReceitaEfet = 0;
 
     dadosPivotados.forEach(row => {
-        const tipo = row.tipo.trim().toLowerCase();
+        const tipo = getTipoFromRow(row).toLowerCase();
         for (let m = 1; m <= 12; m++) {
             const dm = row.meses[m] || { valor: 0.0, pago: false };
             const v = parseFloat(dm.valor) || 0.0;
@@ -1448,8 +1432,11 @@ async function salvarDadosServidor() {
         const transacoesPlanas = [];
         
         dadosPivotados.forEach(row => {
-            // Só exporta se pelo menos uma coluna Item/Tipo/Categoria estiver preenchida
-            if (row.item.trim() || row.tipo.trim() || row.categoria.trim()) {
+            // Deriva o tipo da categoria sempre antes de salvar
+            const tipoParaSalvar = getTipoFromRow(row);
+            const categoriaParaSalvar = row.categoria.trim();
+            // Só exporta se pelo menos uma coluna Item/Categoria estiver preenchida
+            if (row.item.trim() || categoriaParaSalvar) {
                 // Para cada um dos 12 meses
                 for (let m = 1; m <= 12; m++) {
                     const dadosMes = row.meses[m] || { valor: null, pago: false };
@@ -1459,8 +1446,8 @@ async function salvarDadosServidor() {
                         ano: anoAtivo,
                         mes: m,
                         item: row.item.trim(),
-                        tipo: row.tipo.trim(),
-                        categoria: row.categoria.trim(),
+                        tipo: tipoParaSalvar,
+                        categoria: categoriaParaSalvar,
                         valor: valorSalvo,
                         pago: boolValue(dadosMes.pago)
                     });
@@ -1502,10 +1489,11 @@ function atualizarGraficos() {
     // para alimentar os métodos de plotagem
     const transacoesVirtuais = [];
     dadosPivotados.forEach(row => {
+        const tipoRow = getTipoFromRow(row);
         for (let m = 1; m <= 12; m++) {
             transacoesVirtuais.push({
                 mes: m,
-                tipo: row.tipo,
+                tipo: tipoRow,
                 categoria: row.categoria,
                 item: row.item,
                 valor: row.meses[m].valor,
@@ -2722,7 +2710,7 @@ function calcularDadosCategoriaComparativo() {
 
     // Percorre dadosPivotados para somar por categoria
     dadosPivotados.forEach(row => {
-        const tipo = row.tipo.trim().toLowerCase();
+        const tipo = getTipoFromRow(row).toLowerCase();
         const categoria = row.categoria.trim();
         if (!categoria) return;
 
@@ -2741,9 +2729,10 @@ function calcularDadosCategoriaComparativo() {
                 remuneracaoTotal += valor;
             } else if (tipo !== "receita") {
                 if (!categoriasMap[categoria]) {
-                    categoriasMap[categoria] = 0;
+                    categoriasMap[categoria] = { valor: 0, tipoNome: tipo };
                 }
-                categoriasMap[categoria] += valor;
+                categoriasMap[categoria].valor += valor;
+                categoriasMap[categoria].tipoNome = tipo;
             }
         }
     });
@@ -2755,22 +2744,30 @@ function calcularDadosCategoriaComparativo() {
     });
 
     const categories = Object.entries(categoriasMap)
-        .sort((a, b) => b[1] - a[1])
-        .map(([catName, catValor]) => {
+        .sort((a, b) => b[1].valor - a[1].valor)
+        .map(([catName, catData]) => {
             const meta = mapaMetas[catName.toLowerCase()] || 0;
-            const valorPercentual = remuneracaoTotal > 0 ? (catValor / remuneracaoTotal) * 100 : 0;
+            const valorPercentual = remuneracaoTotal > 0 ? (catData.valor / remuneracaoTotal) * 100 : 0;
             const desvio = meta > 0 ? ((valorPercentual - meta) / meta) * 100 : 0;
             return {
                 categoria: catName,
-                valor: catValor,
+                valor: catData.valor,
                 valor_percentual_remuneracao: valorPercentual,
                 meta: meta,
                 desvio: desvio,
+                tipoNome: catData.tipoNome,
             };
         });
 
+    // Classifica: despesa primeiro, depois outros tipos
+    const categoriasDespesa = categories.filter(c => c.tipoNome && c.tipoNome.toLowerCase() === "despesa");
+    const categoriasOutros = categories.filter(c => !c.tipoNome || c.tipoNome.toLowerCase() !== "despesa");
+    const sortByDesvioDesc = (a, b) => (b.desvio || 0) - (a.desvio || 0);
+    categoriasDespesa.sort(sortByDesvioDesc);
+    categoriasOutros.sort(sortByDesvioDesc);
+
     return {
-        categories: categories,
+        categories: [...categoriasDespesa, ...categoriasOutros],
         remuneracao_total: remuneracaoTotal,
         meta_total: settingsCategorias.reduce((sum, c) => sum + c.valor, 0),
     };
@@ -2839,13 +2836,25 @@ function renderGraficoCategoriaComparativo(canvas, data) {
 
     const labels = categories.map(c => c.categoria);
     const desvios = categories.map(c => c.desvio || 0);
+
+    // Cores: despesa = verde/vermelho; outros = amarelo
     const cores = categories.map(c => {
         const d = c.desvio || 0;
-        return d < 0 ? "rgba(46, 204, 113, 0.7)" : "rgba(231, 76, 60, 0.7)";
+        const isDespesa = c.tipoNome && c.tipoNome.toLowerCase() === "despesa";
+        if (isDespesa) {
+            return d < 0 ? "rgba(46, 204, 113, 0.7)" : "rgba(231, 76, 60, 0.7)";
+        } else {
+            return "rgba(241, 196, 15, 0.7)";
+        }
     });
     const bordas = categories.map(c => {
         const d = c.desvio || 0;
-        return d < 0 ? "rgba(46, 204, 113, 1)" : "rgba(231, 76, 60, 1)";
+        const isDespesa = c.tipoNome && c.tipoNome.toLowerCase() === "despesa";
+        if (isDespesa) {
+            return d < 0 ? "rgba(46, 204, 113, 1)" : "rgba(231, 76, 60, 1)";
+        } else {
+            return "rgba(241, 196, 15, 1)";
+        }
     });
     // Guarda dados das categorias para usar no tooltip
     const categoriasMap = {};
