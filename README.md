@@ -184,10 +184,11 @@ Observações:
 ```text
 app/
   main.py               App FastAPI, CORS, Auth Google e mount /static
-  config.py             .env, Engine, SessionLocal, Base, QUOTE_CACHE_TTL
-  models.py             Modelos SQLAlchemy
-  transactions.py       Router + lógica de transações + validações
-  investments.py        Router + lógica de investimentos + yfinance
+  config.py             Config (.env), Engine, SessionLocal, Base
+  models.py             Modelos SQLAlchemy (unificados)
+  transactions.py       Router de transações + settings (tipos/categorias)
+  investments.py        Router de investimentos + yfinance
+  auth.py               Sessões e autenticação
   static/
     index.html
     carteira-investimento.html
@@ -199,20 +200,16 @@ app/
 alembic/
   env.py
   versions/
-    61f5ca4cd77f_create_initial_tables.py
-    d191e4391174_add_owner_id_to_transactions.py
-    7a9d3b1f4c2c_add_audit_logs_table.py
-    8c2f1b4d5a7a_add_investment_assets_table.py
-    a1b2c3d4e5f6_drop_audit_logs_table.py
- data/
- scripts/
-   alembic_stamp_head_if_needed.py
-   import_csv.py
- .env
- Dockerfile
- docker-compose.yml
- pyproject.toml
- uv.lock
+    bb8a7514b4ee_banco_unificado_v1.py   ← migração única (todas as tabelas)
+data/
+scripts/
+  alembic_stamp_head_if_needed.py
+  import_csv.py
+.env
+Dockerfile
+docker-compose.yml
+pyproject.toml
+uv.lock
 ```
 
 ---
@@ -251,6 +248,8 @@ uv run alembic upgrade head
 ```
 
 > Por padrão, o app usa `sqlite:///./data/controle_financeiro.db`.
+>
+> **Nota**: As migrações foram unificadas em um único arquivo (`bb8a7514b4ee_banco_unificado_v1.py`). Se você já possui um banco de dados com migrações antigas, o script `scripts/alembic_stamp_head_if_needed.py` (executado automaticamente no Docker) fará o stamp para a nova head.
 
 ### 5. Rodar o servidor
 
@@ -348,8 +347,24 @@ uv run python -m compileall app
 |---|---|---|
 | `GET` | `/api/transactions?ano=YYYY` | Lista lançamentos do ano |
 | `POST` | `/api/transactions/bulk-save?ano=YYYY` | Salva todos os lançamentos do ano |
+| `GET` | `/api/transactions/anos` | Lista anos com lançamentos |
 | `GET` | `/api/transactions/download` | Exporta CSV completo |
 | `POST` | `/api/transactions/upload` | Importa CSV (substitui dados) |
+| `GET` | `/api/transactions/dropdown-data` | Tipos e categorias para dropdowns |
+| `GET` | `/api/transactions/dashboard/categoria-comparativo` | Comparativo categorias vs metas |
+
+### Configurações (Tipos e Categorias)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/settings/tipos` | Lista tipos (Receita, Despesa...) |
+| `POST` | `/api/settings/tipos` | Cria novo tipo |
+| `PUT` | `/api/settings/tipos/{id}` | Altera nome do tipo |
+| `DELETE` | `/api/settings/tipos/{id}` | Remove tipo (se não protegido) |
+| `GET` | `/api/settings/categorias` | Lista categorias do usuário |
+| `POST` | `/api/settings/categorias` | Cria nova categoria |
+| `PUT` | `/api/settings/categorias/{id}` | Altera categoria |
+| `DELETE` | `/api/settings/categorias/{id}` | Remove categoria (se não protegida) |
 
 ### Carteira de Investimento
 
