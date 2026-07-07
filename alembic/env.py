@@ -13,7 +13,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-from app.config import Base, engine  # noqa: E402
+from app.config import Base  # noqa: E402
 import app.models  # noqa: E402, F401
 
 target_metadata = Base.metadata
@@ -33,8 +33,9 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    config_section = config.get_section(config.config_ini_section, {})
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        config_section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
