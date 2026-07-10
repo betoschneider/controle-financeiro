@@ -282,7 +282,10 @@ async function autenticarViaGoogle(code, state) {
             atualizarVisibilidadeBotaoConfig();
             carregarDadosDoAno();
         } else {
-            alert(data.detail || 'Falha no login via Google.');
+            const msg = Array.isArray(data.detail)
+                ? data.detail.map(e => e.msg || JSON.stringify(e)).join('; ')
+                : (data.detail || 'Falha no login via Google.');
+            alert(msg);
         }
     } catch (e) {
         console.error('Erro OAuth Google', e);
