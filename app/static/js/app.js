@@ -189,13 +189,27 @@ function configurarEventListeners() {
 
     btnLogout.addEventListener("click", realizarLogout);
 
+    // Botão Gerenciar Categorias no subtítulo do Controle Financeiro
     const btnRedirect = document.getElementById("btn-settings-redirect");
     if (btnRedirect) {
         btnRedirect.addEventListener("click", () => {
-            const configTabBtn = document.querySelector('.tab-btn[data-tab="tab-configuracoes"]');
-            if (configTabBtn) {
-                configTabBtn.click();
-            }
+            ativarAba('tab-configuracoes');
+        });
+    }
+
+    // Botão Gerenciar Carteira no subtítulo da Carteira
+    const btnCarteiraRedirect = document.getElementById("btn-carteira-gerenciar-redirect");
+    if (btnCarteiraRedirect) {
+        btnCarteiraRedirect.addEventListener("click", () => {
+            ativarAba('tab-carteira-gerenciar');
+        });
+    }
+
+    // Botão Voltar para Carteira (no gerenciamento)
+    const btnVoltarCarteira = document.getElementById("btn-carteira-gerenciar-voltar");
+    if (btnVoltarCarteira) {
+        btnVoltarCarteira.addEventListener("click", () => {
+            ativarAba('tab-carteira');
         });
     }
 
@@ -203,32 +217,51 @@ function configurarEventListeners() {
     const btnGoogle = document.getElementById('btn-google-login');
     if (btnGoogle) btnGoogle.addEventListener('click', iniciarLoginGoogle);
 
-    // Configuração de abas
-    const tabBtns = document.querySelectorAll(".tab-btn");
+    // Função para ativar uma aba programaticamente
+    function ativarAba(tabId) {
+        const tabBtns = document.querySelectorAll(".header-tabs .tab-btn");
+        tabBtns.forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+        
+        // Ativa o botão correspondente
+        const btn = document.querySelector(`.header-tabs .tab-btn[data-tab="${tabId}"]`);
+        if (btn) btn.classList.add("active");
+        
+        // Ativa o conteúdo
+        document.getElementById(tabId).classList.add("active");
+        document.body.classList.toggle("investment-mode", tabId === "tab-carteira" || tabId === "tab-carteira-gerenciar");
+        document.body.classList.toggle("settings-mode", tabId === "tab-configuracoes");
+        
+        // Mostra/esconde os subtítulos conforme a aba
+        document.getElementById("subtitle-controle-financeiro")?.classList.toggle("hidden", tabId !== "tab-editar");
+        document.getElementById("subtitle-carteira")?.classList.toggle("hidden", tabId !== "tab-carteira");
+        
+        // Re-renderiza para garantir a consistência das tabelas
+        if (tabId === "tab-carteira") {
+            if (typeof window.onInvestmentTabActivated === "function") {
+                window.onInvestmentTabActivated();
+            }
+        } else if (tabId === "tab-configuracoes") {
+            carregarSettings();
+        } else if (tabId === "tab-carteira-gerenciar") {
+            carregarCarteiraGerenciar();
+        } else {
+            renderizarTabelas();
+        }
+        atualizarVisibilidadeBotoes();
+    }
+
+    // Configuração de abas (apenas botões no header-tabs)
+    const tabBtns = document.querySelectorAll(".header-tabs .tab-btn");
     tabBtns.forEach(btn => {
         btn.addEventListener("click", () => {
-            tabBtns.forEach(b => b.classList.remove("active"));
-            document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-            
-            btn.classList.add("active");
             const tabId = btn.getAttribute("data-tab");
-            document.getElementById(tabId).classList.add("active");
-            document.body.classList.toggle("investment-mode", tabId === "tab-carteira");
-            document.body.classList.toggle("settings-mode", tabId === "tab-configuracoes");
-            
-            // Re-renderiza para garantir a consistência das tabelas
-            if (tabId === "tab-carteira") {
-                if (typeof window.onInvestmentTabActivated === "function") {
-                    window.onInvestmentTabActivated();
-                }
-            } else if (tabId === "tab-configuracoes") {
-                carregarSettings();
-            } else {
-                renderizarTabelas();
-            }
-            atualizarVisibilidadeBotaoConfig();
+            ativarAba(tabId);
         });
     });
+
+    // Botões da página de gerenciamento de carteira
+    initCarteiraGerenciar();
 }
 
 // Inicia fluxo de login com Google: Authorization Code Flow (PKCE implícito via servidor)
@@ -279,7 +312,7 @@ async function autenticarViaGoogle(code, state) {
         if (resp.ok) {
             // Backend definiu o cookie de sessão; fecha modal e recarrega
             authModal.classList.remove('active');
-            atualizarVisibilidadeBotaoConfig();
+            atualizarVisibilidadeBotoes();
             carregarDadosDoAno();
         } else {
             const msg = Array.isArray(data.detail)
@@ -292,6 +325,49 @@ async function autenticarViaGoogle(code, state) {
         alert('Erro de conexão no login via Google.');
     } finally {
         exibirLoading(false);
+    }
+}
+
+// Tenta detectar se o usuário está logado no Google e mostra a foto de perfil
+function atualizarBotaoGoogle() {
+    const btnGoogle = document.getElementById('btn-google-login');
+    if (!btnGoogle) return;
+
+    const btnContent = document.getElementById('google-btn-content');
+    const profilePic = document.getElementById('google-profile-pic');
+    
+    // Tenta carregar a foto do perfil do cache localStorage (salva no último login)
+    const savedPic = localStorage.getItem('google_profile_pic');
+    if (savedPic) {
+        if (btnContent) btnContent.classList.add('hidden');
+        if (profilePic) {
+            profilePic.src = savedPic;
+            profilePic.classList.remove('hidden');
+        }
+        btnGoogle.title = 'Conectado ao Google';
+        return;
+    }
+
+    // Tenta usar a API do Google para verificar se o usuário tem sessão ativa
+    // Via Google Identity Services (se carregado)
+    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+        try {
+            google.accounts.id.initialize({
+                client_id: document.querySelector('meta[name="google-client-id"]')?.getAttribute('content'),
+                callback: () => {}
+            });
+            // Não faz nada automaticamente, apenas verifica
+        } catch (e) {
+            // Ignora
+        }
+    }
+}
+
+// Salva a foto do Google para uso futuro
+function salvarFotoGoogle(url) {
+    if (url) {
+        localStorage.setItem('google_profile_pic', url);
+        atualizarBotaoGoogle();
     }
 }
 
@@ -317,12 +393,15 @@ function verificarAutenticacao() {
     if (token) {
         authModal.classList.remove("active");
         carregarDadosDoAno();
-        atualizarVisibilidadeBotaoConfig();
+        atualizarVisibilidadeBotoes();
+        // Se já autenticado, tenta mostrar foto do Google
+        atualizarBotaoGoogle();
     } else {
         authModal.classList.add("active");
         showAuthScreen("auth-login-step1");
         document.getElementById("login-username").focus();
-        atualizarVisibilidadeBotaoConfig();
+        atualizarVisibilidadeBotoes();
+        atualizarBotaoGoogle();
     }
 }
 
@@ -394,7 +473,7 @@ async function realizarLoginStep2() {
             document.getElementById("login-password").value = "";
             document.getElementById("login-otp").value = "";
             
-            atualizarVisibilidadeBotaoConfig();
+            atualizarVisibilidadeBotoes();
             carregarDadosDoAno();
         } else {
             errorEl.textContent = data.detail || "Código de autenticação inválido.";
@@ -516,34 +595,31 @@ async function realizarLogout() {
         authModal.classList.add("active");
         showAuthScreen("auth-login-step1");
         exibirLoading(false);
-        atualizarVisibilidadeBotaoConfig();
+        atualizarVisibilidadeBotoes();
+        localStorage.removeItem('google_profile_pic');
+        atualizarBotaoGoogle();
     }
 }
 
-// Atualizar a visibilidade do botão de configurações do header e da aba Configurações
-function atualizarVisibilidadeBotaoConfig() {
-    const btnRedirect = document.getElementById("btn-settings-redirect");
-    if (!btnRedirect) return;
-    
+// Atualizar a visibilidade dos botões de navegação
+function atualizarVisibilidadeBotoes() {
     const token = obterCookie("session_token");
-    const activeTabBtn = document.querySelector(".tab-btn.active");
-    const activeTab = activeTabBtn ? activeTabBtn.getAttribute("data-tab") : null;
     
-    if (token && activeTab === "tab-editar") {
-        btnRedirect.classList.remove("hidden");
-    } else {
-        btnRedirect.classList.add("hidden");
+    // Botão Gerenciar Categorias no subtítulo do Controle Financeiro
+    const btnRedirect = document.getElementById("btn-settings-redirect");
+    if (btnRedirect) {
+        // Só mostra se estiver logado (independente da aba ativa)
+        btnRedirect.classList.toggle("hidden", !token);
     }
 
-    // Mostra/esconde o botão da aba Configurações quando logado
-    const configTabBtn = document.getElementById("btn-tab-configuracoes");
-    if (configTabBtn) {
-        if (token) {
-            configTabBtn.classList.remove("hidden");
-        } else {
-            configTabBtn.classList.add("hidden");
-        }
-    }
+    // Botões de navegação entre abas foram removidos do header.
+    // A navegação para Configurações e Gerenciar Carteira é feita
+    // exclusivamente pelos botões nos subtítulos de cada área.
+}
+
+// Manter compatibilidade com chamadas existentes
+function atualizarVisibilidadeBotaoConfig() {
+    atualizarVisibilidadeBotoes();
 }
 
 // Exportar CSV
@@ -1917,7 +1993,27 @@ function initInvestments() {
     if (confirmButton) confirmButton.addEventListener("click", confirmInvestmentContribution);
 
     window.onInvestmentTabActivated = () => {
-        if (!investmentPortfolio) carregarInvestments();
+        if (!investmentPortfolio) {
+            carregarInvestments().then(() => {
+                // Se não tem ativos, redireciona para gerenciamento na primeira vez
+                if (investmentPortfolio && (!investmentPortfolio.assets || investmentPortfolio.assets.length === 0)) {
+                    const firstTime = localStorage.getItem('carteira_first_visit');
+                    if (!firstTime) {
+                        localStorage.setItem('carteira_first_visit', '1');
+                        ativarAba('tab-carteira-gerenciar');
+                    }
+                }
+            });
+        } else {
+            // Verifica se está vazio e redireciona
+            if (!investmentPortfolio.assets || investmentPortfolio.assets.length === 0) {
+                const firstTime = localStorage.getItem('carteira_first_visit');
+                if (!firstTime) {
+                    localStorage.setItem('carteira_first_visit', '1');
+                    ativarAba('tab-carteira-gerenciar');
+                }
+            }
+        }
     };
 }
 
@@ -1939,6 +2035,7 @@ async function carregarInvestments() {
         investmentPortfolio = await resp.json();
         renderInvestmentPortfolio();
         renderInvestmentSuggestions();
+        return investmentPortfolio;
     } catch (e) {
         console.error(e);
         alert("Não foi possível carregar a carteira de investimento.");
@@ -1998,7 +2095,6 @@ function renderDeviationChart(assets) {
     const labels = assets.map(asset => asset.ticker);
     const values = assets.map(asset => asset.deviation || 0);
     const colors = assets.map(asset => colorForGroup(asset.group));
-    const borderColors = assets.map(asset => asset.deviation < 0 ? "rgba(231, 76, 60, 0.9)" : "rgba(46, 204, 113, 0.9)");
     const textColor = getComputedStyle(document.body).getPropertyValue("--text-secondary").trim() || "#9090a2";
     const gridColor = getComputedStyle(document.body).getPropertyValue("--border-color").trim() || "rgba(255,255,255,.08)";
 
@@ -2016,7 +2112,7 @@ function renderDeviationChart(assets) {
             ctx.lineTo(x, yScale.bottom);
             ctx.lineWidth = 2;
             ctx.setLineDash([6, 4]);
-            ctx.strokeStyle = "#ff4757";
+            ctx.strokeStyle = "var(--color-despesa, #ff4757)";
             ctx.stroke();
             ctx.restore();
         }
@@ -2031,8 +2127,7 @@ function renderDeviationChart(assets) {
                 label: "Desvio",
                 data: values,
                 backgroundColor: colors,
-                borderColor: borderColors,
-                borderWidth: 1
+                borderWidth: 0
             }]
         },
         options: {
@@ -2291,6 +2386,309 @@ function colorForGroup(group) {
         hash |= 0;
     }
     return GROUP_COLORS[Math.abs(hash) % GROUP_COLORS.length];
+}
+
+// ===================================================================
+// Gerenciamento de Carteira de Investimento (CRUD)
+// ===================================================================
+
+let carteiraGerenciarAtivos = [];
+
+function initCarteiraGerenciar() {
+    const btnAdicionar = document.getElementById("btn-carteira-gerenciar-adicionar");
+    if (btnAdicionar) {
+        btnAdicionar.addEventListener("click", adicionarLinhaCarteira);
+    }
+
+    const btnSalvar = document.getElementById("btn-carteira-gerenciar-salvar");
+    if (btnSalvar) {
+        btnSalvar.addEventListener("click", salvarCarteiraGerenciar);
+    }
+
+    // Upload CSV
+    const uploadTrigger = document.getElementById("btn-carteira-gerenciar-upload-trigger");
+    const uploadInput = document.getElementById("btn-carteira-gerenciar-upload");
+    if (uploadTrigger && uploadInput) {
+        uploadTrigger.addEventListener("click", () => uploadInput.click());
+        uploadInput.addEventListener("change", (e) => {
+            if (e.target.files && e.target.files[0]) {
+                importarCarteiraCSV(e.target.files[0]);
+            }
+        });
+    }
+
+    // Download CSV
+    const btnDownload = document.getElementById("btn-carteira-gerenciar-download");
+    if (btnDownload) {
+        btnDownload.addEventListener("click", downloadCarteiraCSV);
+    }
+}
+
+async function carregarCarteiraGerenciar() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    exibirLoading(true);
+    try {
+        const resp = await fetch("/api/investments", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (resp.status === 401) {
+            realizarLogout();
+            return;
+        }
+        if (!resp.ok) throw new Error("Falha ao carregar ativos");
+
+        carteiraGerenciarAtivos = await resp.json();
+        
+        // Ordena por ticker
+        carteiraGerenciarAtivos.sort((a, b) => (a.ticker || "").localeCompare(b.ticker || ""));
+        
+        renderizarCarteiraGerenciar();
+    } catch (e) {
+        console.error(e);
+        alert("Não foi possível carregar a carteira.");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+function renderizarCarteiraGerenciar() {
+    const tbody = document.getElementById("carteira-gerenciar-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    const disclaimer = document.getElementById("carteira-gerenciar-disclaimer");
+    
+    if (carteiraGerenciarAtivos.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="7" style="text-align:center;color:var(--text-secondary);">Nenhum ativo cadastrado. Clique em "Adicionar Ativo" para começar.</td>';
+        tbody.appendChild(tr);
+        if (disclaimer) disclaimer.classList.remove("hidden");
+        return;
+    }
+
+    if (disclaimer) disclaimer.classList.add("hidden");
+
+    carteiraGerenciarAtivos.forEach((asset, idx) => {
+        const tr = document.createElement("tr");
+        tr.dataset.assetIndex = idx;
+
+        // Botão deletar
+        const tdDel = document.createElement("td");
+        tdDel.style.textAlign = "left";
+        tdDel.style.width = "40px";
+        tdDel.style.paddingLeft = "6px";
+        tdDel.innerHTML = `<button class="btn-delete-row" onclick="removerAtivoCarteira(${idx})" title="Remover Ativo"><i class="fa-solid fa-trash-can"></i></button>`;
+        tr.appendChild(tdDel);
+
+        // Empresa
+        const tdEmpresa = document.createElement("td");
+        const inputEmpresa = document.createElement("input");
+        inputEmpresa.type = "text";
+        inputEmpresa.className = "cell-input";
+        inputEmpresa.value = asset.company || "";
+        inputEmpresa.addEventListener("change", (e) => {
+            carteiraGerenciarAtivos[idx].company = e.target.value.trim();
+        });
+        tdEmpresa.appendChild(inputEmpresa);
+        tr.appendChild(tdEmpresa);
+
+        // Ativo (Ticker)
+        const tdTicker = document.createElement("td");
+        const inputTicker = document.createElement("input");
+        inputTicker.type = "text";
+        inputTicker.className = "cell-input";
+        inputTicker.value = asset.ticker || "";
+        inputTicker.addEventListener("change", (e) => {
+            carteiraGerenciarAtivos[idx].ticker = e.target.value.trim().toUpperCase();
+        });
+        tdTicker.appendChild(inputTicker);
+        tr.appendChild(tdTicker);
+
+        // Quantidade
+        const tdQtd = document.createElement("td");
+        const inputQtd = document.createElement("input");
+        inputQtd.type = "number";
+        inputQtd.min = "0";
+        inputQtd.step = "1";
+        inputQtd.className = "cell-input cell-input-number";
+        inputQtd.value = asset.quantity || 0;
+        inputQtd.addEventListener("change", (e) => {
+            carteiraGerenciarAtivos[idx].quantity = parseInt(e.target.value) || 0;
+        });
+        tdQtd.appendChild(inputQtd);
+        tr.appendChild(tdQtd);
+
+        // Meta
+        const tdMeta = document.createElement("td");
+        const inputMeta = document.createElement("input");
+        inputMeta.type = "number";
+        inputMeta.min = "0";
+        inputMeta.step = "0.01";
+        inputMeta.className = "cell-input cell-input-number";
+        inputMeta.value = asset.target ?? "";
+        inputMeta.placeholder = "0.00";
+        inputMeta.addEventListener("change", (e) => {
+            const val = e.target.value.trim();
+            carteiraGerenciarAtivos[idx].target = val === "" ? null : parseFloat(val);
+        });
+        tdMeta.appendChild(inputMeta);
+        tr.appendChild(tdMeta);
+
+        // Ramo (Sector)
+        const tdSector = document.createElement("td");
+        const inputSector = document.createElement("input");
+        inputSector.type = "text";
+        inputSector.className = "cell-input";
+        inputSector.value = asset.sector || "";
+        inputSector.addEventListener("change", (e) => {
+            carteiraGerenciarAtivos[idx].sector = e.target.value.trim();
+        });
+        tdSector.appendChild(inputSector);
+        tr.appendChild(tdSector);
+
+        // Grupo
+        const tdGroup = document.createElement("td");
+        const inputGroup = document.createElement("input");
+        inputGroup.type = "text";
+        inputGroup.className = "cell-input";
+        inputGroup.value = asset.group || "";
+        inputGroup.addEventListener("change", (e) => {
+            carteiraGerenciarAtivos[idx].group = e.target.value.trim();
+        });
+        tdGroup.appendChild(inputGroup);
+        tr.appendChild(tdGroup);
+
+        tbody.appendChild(tr);
+    });
+}
+
+function adicionarLinhaCarteira() {
+    carteiraGerenciarAtivos.push({
+        id: null,
+        company: "",
+        ticker: "",
+        quantity: 0,
+        target: null,
+        sector: "",
+        group: "",
+    });
+    renderizarCarteiraGerenciar();
+
+    // Rola para o final
+    setTimeout(() => {
+        const container = document.querySelector("#tab-carteira-gerenciar .table-container");
+        if (container) container.scrollTop = container.scrollHeight;
+    }, 100);
+}
+
+function removerAtivoCarteira(idx) {
+    if (!confirm("Remover este ativo da carteira?")) return;
+    carteiraGerenciarAtivos.splice(idx, 1);
+    renderizarCarteiraGerenciar();
+}
+
+async function salvarCarteiraGerenciar() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    // Valida: ticker obrigatório
+    for (const asset of carteiraGerenciarAtivos) {
+        if (!asset.ticker || !asset.ticker.trim()) {
+            alert("Todos os ativos precisam ter um ticker (Ativo) preenchido.");
+            return;
+        }
+    }
+
+    exibirLoading(true);
+    try {
+        // Gera CSV em memória
+        const header = "Empresa,Ativo,Quantidade,Meta,Ramo,Grupo\n";
+        const rows = carteiraGerenciarAtivos.map(a =>
+            `"${a.company || ""}","${(a.ticker || "").toUpperCase()}",${a.quantity || 0},${a.target ?? ""},"${a.sector || ""}","${a.group || ""}"`
+        ).join("\n");
+        const csvBlob = new Blob([header + rows], { type: "text/csv" });
+        const fd = new FormData();
+        fd.append("file", csvBlob, "carteira.csv");
+
+        const resp = await fetch("/api/investments/upload", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` },
+            body: fd
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "Erro ao salvar carteira");
+
+        alert("Carteira salva com sucesso!");
+        await carregarCarteiraGerenciar();
+        // Recarrega também a view da carteira
+        if (investmentPortfolio) carregarInvestments();
+    } catch (e) {
+        console.error(e);
+        alert(e.message || "Não foi possível salvar a carteira.");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+async function importarCarteiraCSV(file) {
+    if (!confirm("A importação substituirá TODOS os ativos atuais pelos dados do CSV. Deseja continuar?")) {
+        document.getElementById("btn-carteira-gerenciar-upload").value = "";
+        return;
+    }
+
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    const fd = new FormData();
+    fd.append("file", file);
+
+    exibirLoading(true);
+    try {
+        const resp = await fetch("/api/investments/upload", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` },
+            body: fd
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "Falha na importação");
+        alert(data.message || "Carteira importada com sucesso!");
+        await carregarCarteiraGerenciar();
+        if (investmentPortfolio) carregarInvestments();
+    } catch (e) {
+        console.error(e);
+        alert(e.message || "Não foi possível importar a carteira.");
+    } finally {
+        document.getElementById("btn-carteira-gerenciar-upload").value = "";
+        exibirLoading(false);
+    }
+}
+
+async function downloadCarteiraCSV() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+    exibirLoading(true);
+    try {
+        const response = await fetch("/api/investments/download", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error("Falha na exportação.");
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "carteira.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error(e);
+        alert("Não foi possível exportar a carteira.");
+    } finally {
+        exibirLoading(false);
+    }
 }
 
 // ===================================================================

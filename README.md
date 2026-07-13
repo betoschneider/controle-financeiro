@@ -1,9 +1,9 @@
 # Controle Financeiro Pessoal
 
-Aplicativo web de controle financeiro pessoal com duas áreas isoladas dentro da mesma aplicação:
+Aplicativo web de controle financeiro pessoal com duas áreas independentes dentro da mesma aplicação:
 
-- **Controle Financeiro**: lançamentos mensais, saldos, filtros, gráficos, importação/exportação CSV e autenticação.
-- **Carteira de Investimento**: acompanhamento de ativos B3, cotações via Yahoo Finance, metas de alocação, sugestão de aporte e importação/exportação CSV.
+- **Controle Financeiro**: lançamentos mensais, saldos, filtros, gráficos, gerenciamento de categorias, importação/exportação CSV e autenticação.
+- **Carteira de Investimento**: acompanhamento de ativos B3, cotações via Yahoo Finance, metas de alocação, sugestão de aporte, página de gerenciamento de ativos e importação/exportação CSV.
 
 O projeto usa **FastAPI**, **SQLAlchemy**, **SQLite**, **Alembic** e frontend em **HTML/CSS/JavaScript** sem framework.
 
@@ -17,11 +17,14 @@ O projeto usa **FastAPI**, **SQLAlchemy**, **SQLite**, **Alembic** e frontend em
 - Configuração de 2FA via Google Authenticator, com QR Code e chave manual.
 - Login em duas etapas: senha e código TOTP.
 - Redefinição de senha validada por TOTP.
-- Login via Google OAuth por popup.
+- Login via Google OAuth por popup, com botão modernizado contendo o logo oficial do Google.
+- Exibição automática da foto de perfil do Google no botão quando o usuário está logado no navegador.
 - Sessão por cookie `session_token` e suporte a header `Authorization`.
 - Limite opcional de criação de contas via variável `ACCOUNT_QUOTA`.
 
 ### Controle Financeiro
+
+A área de **Controle Financeiro** é acessada pela aba homônima na barra de título. Logo abaixo do título há uma barra de subtítulo com o nome da área e o botão **Gerenciar Categorias**, que dá acesso à página de configuração de tipos e categorias.
 
 #### Dashboard de Métricas
 
@@ -82,7 +85,9 @@ Abaixo da tabela, com gráficos de:
 
 ### Carteira de Investimento
 
-Seção acessada pela aba **Carteira**, isolada dos controles do Controle Financeiro.
+Seção acessada pela aba **Carteira** na barra de título. A área possui uma barra de subtítulo com o nome, o status das cotações, botão de atualização e o botão **Gerenciar Carteira**.
+
+A área da carteira possui uma leve variação visual (fundo sutilmente azulado no tema escuro, borda esquerda nos cards) para diferenciá-la da área de Controle Financeiro, funcionando tanto no tema claro quanto no escuro.
 
 #### Métricas
 
@@ -100,9 +105,19 @@ Seção acessada pela aba **Carteira**, isolada dos controles do Controle Financ
 
 #### Gráfico de Desvio da Meta
 
-- Barras horizontais coloridas pela cor do grupo.
+- Barras horizontais coloridas pela cor do grupo, sem bordas.
 - Linha vertical no zero.
-- Borda indicando desvio positivo ou negativo.
+
+#### Gerenciamento de Carteira
+
+Página acessada pelo botão **Gerenciar Carteira** no subtítulo da área de investimento, com:
+
+- **Tabela editável** com todos os ativos: Empresa, Ativo (ticker), Quantidade, Meta (%), Ramo e Grupo — todas as colunas editáveis inline.
+- **Adição** de novos ativos e **remoção** com confirmação.
+- **Ordenação automática** por ticker (ativo).
+- **Importação e exportação CSV** exclusivos desta página.
+- **Salvar** os dados da carteira no servidor.
+- **Disclaimer** na primeira visita, informando que o usuário ainda não possui ativos cadastrados, com redirecionamento automático para a página de gerenciamento.
 
 #### Simulador de Aporte
 
@@ -114,7 +129,7 @@ Seção acessada pela aba **Carteira**, isolada dos controles do Controle Financ
 
 #### CSV
 
-- Importação/exportação CSV da carteira.
+- Importação/exportação CSV da carteira, disponível na página de **Gerenciamento de Carteira**.
 
 ---
 
@@ -382,12 +397,14 @@ uv run python -m compileall app
 
 ## Observações de Uso
 
-- A aba **Controle Financeiro** e a aba **Carteira** são áreas independentes; ao alternar, filtros e gráficos da outra área são ocultados.
+- As abas **Controle Financeiro** e **Carteira** ficam na barra de título. Ao alternar, o subtítulo correspondente é exibido logo abaixo, e filtros/gráficos da outra área são ocultados.
+- O botão **Gerenciar Categorias** aparece no subtítulo do Controle Financeiro e abre a página de configurações de tipos e categorias.
+- O botão **Gerenciar Carteira** aparece no subtítulo da Carteira e abre a página de gerenciamento de ativos.
 - Os cards **Saldo Total do Ano** sempre refletem o ano inteiro, independentemente do filtro de mês selecionado.
 - O comparativo % do **Saldo Total do Ano Projetado** é calculado em relação ao Saldo Total Efetivo do ano anterior, carregado em background após o carregamento principal.
 - O cache das cotações fica em memória; reiniciar o servidor limpa o cache.
 - A consulta ao Yahoo Finance depende de conectividade e disponibilidade externa.
-- Em caso de cache do navegador, os assets usam versão `?v=14`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.
+- Em caso de cache do navegador, os assets usam versão `?v=18`; incremente em `app/static/index.html` ao fazer deploy de mudanças estáticas.
 
 ---
 
