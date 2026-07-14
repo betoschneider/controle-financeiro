@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String
 
 from app.config import Base
 
@@ -33,6 +33,7 @@ class InvestmentAsset(Base):
     company = Column(String, nullable=False, index=True)
     ticker = Column(String, nullable=False, index=True)
     quantity = Column(Integer, nullable=False, default=0)
+    purchase_price = Column(Float, nullable=True)
     target = Column(Float, nullable=True)
     sector = Column(String, nullable=True)
     group = Column(String, nullable=True)
@@ -46,6 +47,16 @@ class Tipo(Base):
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String(50), unique=True, nullable=False, index=True)
     is_protegido = Column(Boolean, nullable=False, default=False)
+
+
+class InvestmentTransaction(Base):
+    __tablename__ = "investment_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticker = Column(String, nullable=False, index=True)
+    quantity = Column(Integer, nullable=False, default=0)
+    purchase_price = Column(Float, nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
 
 class Categoria(Base):

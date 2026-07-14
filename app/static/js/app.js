@@ -2051,6 +2051,20 @@ function renderInvestmentPortfolio() {
     setText("inv-assets-count", String(metrics.asset_count || 0));
     setText("inv-target-sum", `${formatNumber(metrics.target_sum || 0, 2)}%`);
 
+    // Rendimento da carteira
+    const yieldEl = document.getElementById("inv-total-yield");
+    if (yieldEl) {
+        const portfolioYield = metrics.portfolio_yield;
+        if (portfolioYield !== null && portfolioYield !== undefined) {
+            const signal = portfolioYield >= 0 ? "+" : "";
+            yieldEl.textContent = `${signal}${formatNumber(portfolioYield, 2)}%`;
+            yieldEl.style.color = portfolioYield >= 0 ? "#2ecc71" : "#e74c3c";
+            yieldEl.title = `Custo total: ${formatarMoeda(metrics.total_cost || 0)}`;
+        } else {
+            yieldEl.textContent = "";
+        }
+    }
+
     const updatedAt = investmentPortfolio?.last_updated ? new Date(investmentPortfolio.last_updated) : null;
     setText("inv-last-updated", updatedAt ? `Última consulta: ${updatedAt.toLocaleString("pt-BR")}` : "Cotações ainda não carregadas.");
 
@@ -2245,7 +2259,7 @@ function refreshSuggestionRows() {
 async function confirmInvestmentContribution() {
     const purchases = investmentSuggestions
         .filter(item => item.quantity > 0)
-        .map(item => ({ ticker: item.ticker, quantity: item.quantity }));
+        .map(item => ({ ticker: item.ticker, quantity: item.quantity, purchase_price: item.price }));
 
     if (!purchases.length) {
         alert("Informe ao menos uma cota para confirmar o aporte.");
@@ -2445,12 +2459,67 @@ async function carregarCarteiraGerenciar() {
         carteiraGerenciarAtivos.sort((a, b) => (a.ticker || "").localeCompare(b.ticker || ""));
         
         renderizarCarteiraGerenciar();
+        
+        // Carrega também a tabela de rendimento
+        carregarYieldDetails();
     } catch (e) {
         console.error(e);
         alert("Não foi possível carregar a carteira.");
     } finally {
         exibirLoading(false);
     }
+}
+
+async function carregarYieldDetails() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    try {
+        const resp = await fetch("/api/investments/yield-details", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!resp.ok) return;
+
+        const details = await resp.json();
+        renderizarYieldDetails(details);
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function renderizarYieldDetails(details) {
+    const tbody = document.getElementById("carteira-yield-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (!details || details.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="5" style="text-align:center;color:var(--text-secondary);">Nenhum ativo cadastrado.</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+
+    details.forEach(item => {
+        const tr = document.createElement("tr");
+        appendCell(tr, item.ticker, "", true);
+        appendCell(tr, item.quantity, "numeric");
+        appendCell(tr, formatarMoeda(item.avg_purchase_price || 0), "numeric");
+        appendCell(tr, formatarMoeda(item.current_price || 0), "numeric");
+
+        const tdYield = document.createElement("td");
+        tdYield.className = "numeric";
+        if (item.yield_percent !== null && item.yield_percent !== undefined) {
+            const signal = item.yield_percent >= 0 ? "+" : "";
+            tdYield.textContent = `${signal}${formatNumber(item.yield_percent, 2)}%`;
+            tdYield.style.color = item.yield_percent >= 0 ? "#2ecc71" : "#e74c3c";
+            tdYield.style.fontWeight = "600";
+        } else {
+            tdYield.textContent = "-";
+        }
+        tr.appendChild(tdYield);
+
+        tbody.appendChild(tr);
+    });
 }
 
 function renderizarCarteiraGerenciar() {
@@ -2570,6 +2639,7 @@ function adicionarLinhaCarteira() {
         company: "",
         ticker: "",
         quantity: 0,
+        purchase_price: null,
         target: null,
         sector: "",
         group: "",
@@ -2604,9 +2674,9 @@ async function salvarCarteiraGerenciar() {
     exibirLoading(true);
     try {
         // Gera CSV em memória
-        const header = "Empresa,Ativo,Quantidade,Meta,Ramo,Grupo\n";
+        const header = "Empresa,Ativo,Quantidade,PrecoCompra,Meta,Ramo,Grupo\n";
         const rows = carteiraGerenciarAtivos.map(a =>
-            `"${a.company || ""}","${(a.ticker || "").toUpperCase()}",${a.quantity || 0},${a.target ?? ""},"${a.sector || ""}","${a.group || ""}"`
+            `"${a.company || ""}","${(a.ticker || "").toUpperCase()}",${a.quantity || 0},${a.purchase_price ?? ""},${a.target ?? ""},"${a.sector || ""}","${a.group || ""}"`
         ).join("\n");
         const csvBlob = new Blob([header + rows], { type: "text/csv" });
         const fd = new FormData();

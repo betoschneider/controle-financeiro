@@ -19,7 +19,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
-    <link rel="stylesheet" href="css/style.css?v=19">
+    <link rel="stylesheet" href="css/style.css?v=20">
 </head>
 
 <body>
@@ -362,6 +362,7 @@
                     <div class="metric-info">
                         <span class="metric-label">Patrimônio Total</span>
                         <h2 class="metric-value" id="inv-total">R$ 0,00</h2>
+                        <span id="inv-total-yield" class="metric-delta" style="font-size:0.9rem;"></span>
                     </div>
                 </div>
                 <div class="metric-card glass">
@@ -617,6 +618,27 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Tabela de Rendimento dos Ativos -->
+                    <div class="chart-card glass" style="margin-top:24px;">
+                        <h3><i class="fa-solid fa-percent"></i> Rendimento por Ativo</h3>
+                        <div class="table-container investment-table-wrap">
+                            <table class="interactive-table investment-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ativo</th>
+                                        <th>Quantidade</th>
+                                        <th>Preço de Compra (média)</th>
+                                        <th>Preço Atual</th>
+                                        <th></th>Rendimento (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="carteira-yield-tbody">
+                                    <tr><td colspan="5" style="text-align:center;color:var(--text-secondary);">Carregando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                     <div style="display:flex;justify-content:space-between;margin-top:12px;">
                         <button id="btn-carteira-gerenciar-adicionar" class="btn btn-secondary"><i class="fa-solid fa-plus"></i> Adicionar Ativo</button>
                         <button id="btn-carteira-gerenciar-voltar" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Voltar para Carteira</button>
@@ -627,7 +649,7 @@
     </div>
 
     <!-- Scripts da Aplicação -->
-    <script src="js/app.js?v=19"></script>
+    <script src="js/app.js?v=20"></script>
 </body>
 
 </html>
