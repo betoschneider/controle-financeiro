@@ -14,9 +14,12 @@ from sqlalchemy.orm import Session
 
 from app import investments, models, transactions
 from app.auth import criar_sessao, encerrar_sessao, verificar_autenticacao
-from app.config import engine, get_db, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+from app.config import Base, engine, get_db, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 from app.models import User
 from app.transactions import get_user_by_username
+
+# Cria as tabelas no banco se não existirem (schema sempre atualizado com os modelos)
+Base.metadata.create_all(bind=engine)
 
 
 def hash_password(password: str) -> str:
