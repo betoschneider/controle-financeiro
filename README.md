@@ -1,6 +1,8 @@
-# Controle Financeiro Pessoal
+# RedeFin
 
-Aplicativo web de controle financeiro pessoal com duas áreas independentes dentro da mesma aplicação:
+**Controle Financeiro e Balanceador de Carteira de Investimentos**
+
+Aplicativo web com duas áreas integradas dentro da mesma aplicação:
 
 - **Controle Financeiro**: lançamentos mensais, saldos, filtros, gráficos, gerenciamento de categorias, importação/exportação CSV e autenticação.
 - **Carteira de Investimento**: acompanhamento de ativos B3, cotações via Yahoo Finance, metas de alocação, sugestão de aporte, página de gerenciamento de ativos e importação/exportação CSV.
