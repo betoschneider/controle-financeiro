@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app import investments, models, transactions
+from app import insights, investments, models, profile, transactions
 from app.auth import criar_sessao, encerrar_sessao, verificar_autenticacao
 from app.config import Base, engine, get_db, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 from app.models import User
@@ -333,5 +333,7 @@ def login_google(
 app.include_router(transactions.router)
 app.include_router(transactions.settings_router)
 app.include_router(investments.router)
+app.include_router(insights.router)
+app.include_router(profile.router)
 
 app.mount("/", StaticFiles(directory="app/static", html=True), name="static")

@@ -1399,6 +1399,46 @@ body.light-theme.investment-mode .app-header {
     font-size: 12px;
 }
 
+/* Seção de Insights */
+.insight-content {
+    background: rgba(128, 128, 128, 0.06);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 12px;
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.insight-content p {
+    margin: 4px 0;
+}
+
+.insight-content strong {
+    color: var(--color-receita);
+}
+
+.insight-content ul,
+.insight-content ol {
+    margin: 8px 0;
+    padding-left: 24px;
+}
+
+.insight-content li {
+    margin: 4px 0;
+}
+
+.header-user-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.header-user-info span {
+    line-height: 1.2;
+}
+
 /* Responsividade Básica */
 @media (max-width: 768px) {
     .app-header,

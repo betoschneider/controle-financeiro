@@ -217,40 +217,6 @@ function configurarEventListeners() {
     const btnGoogle = document.getElementById('btn-google-login');
     if (btnGoogle) btnGoogle.addEventListener('click', iniciarLoginGoogle);
 
-    // Função para ativar uma aba programaticamente
-    function ativarAba(tabId) {
-        const tabBtns = document.querySelectorAll(".subtitle-tabs .tab-btn");
-        tabBtns.forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-        
-        // Ativa o botão correspondente
-        const btn = document.querySelector(`.subtitle-tabs .tab-btn[data-tab="${tabId}"]`);
-        if (btn) btn.classList.add("active");
-        
-        // Ativa o conteúdo
-        document.getElementById(tabId).classList.add("active");
-        document.body.classList.toggle("investment-mode", tabId === "tab-carteira" || tabId === "tab-carteira-gerenciar");
-        document.body.classList.toggle("settings-mode", tabId === "tab-configuracoes");
-        
-        // Mostra/esconde os controles do subtítulo conforme a aba
-        document.getElementById("subtitle-right-controle")?.classList.toggle("hidden", tabId !== "tab-editar");
-        document.getElementById("subtitle-right-carteira")?.classList.toggle("hidden", tabId !== "tab-carteira");
-        
-        // Re-renderiza para garantir a consistência das tabelas
-        if (tabId === "tab-carteira") {
-            if (typeof window.onInvestmentTabActivated === "function") {
-                window.onInvestmentTabActivated();
-            }
-        } else if (tabId === "tab-configuracoes") {
-            carregarSettings();
-        } else if (tabId === "tab-carteira-gerenciar") {
-            carregarCarteiraGerenciar();
-        } else {
-            renderizarTabelas();
-        }
-        atualizarVisibilidadeBotoes();
-    }
-
     // Configuração de abas (botões no subtitle-tabs)
     const tabBtns = document.querySelectorAll(".subtitle-tabs .tab-btn");
     tabBtns.forEach(btn => {
@@ -262,6 +228,43 @@ function configurarEventListeners() {
 
     // Botões da página de gerenciamento de carteira
     initCarteiraGerenciar();
+}
+
+// Função para ativar uma aba programaticamente (escopo global)
+function ativarAba(tabId) {
+    const tabBtns = document.querySelectorAll(".subtitle-tabs .tab-btn");
+    tabBtns.forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+    
+    // Ativa o botão correspondente
+    const btn = document.querySelector(`.subtitle-tabs .tab-btn[data-tab="${tabId}"]`);
+    if (btn) btn.classList.add("active");
+    
+    // Ativa o conteúdo
+    document.getElementById(tabId).classList.add("active");
+    document.body.classList.toggle("investment-mode", tabId === "tab-carteira" || tabId === "tab-carteira-gerenciar");
+    document.body.classList.toggle("settings-mode", tabId === "tab-configuracoes" || tabId === "tab-perfil");
+    
+    // Mostra/esconde os controles do subtítulo conforme a aba
+    document.getElementById("subtitle-right-controle")?.classList.toggle("hidden", tabId !== "tab-editar");
+    document.getElementById("subtitle-right-carteira")?.classList.toggle("hidden", tabId !== "tab-carteira");
+    document.getElementById("subtitle-right-config")?.classList.toggle("hidden", tabId !== "tab-perfil");
+    
+    // Re-renderiza para garantir a consistência das tabelas
+    if (tabId === "tab-carteira") {
+        if (typeof window.onInvestmentTabActivated === "function") {
+            window.onInvestmentTabActivated();
+        }
+    } else if (tabId === "tab-configuracoes") {
+        carregarSettings();
+    } else if (tabId === "tab-carteira-gerenciar") {
+        carregarCarteiraGerenciar();
+    } else if (tabId === "tab-perfil") {
+        carregarPerfil();
+    } else {
+        renderizarTabelas();
+    }
+    atualizarVisibilidadeBotoes();
 }
 
 // Inicia fluxo de login com Google: Authorization Code Flow (PKCE implícito via servidor)
@@ -610,6 +613,18 @@ function atualizarVisibilidadeBotoes() {
     if (btnRedirect) {
         // Só mostra se estiver logado (independente da aba ativa)
         btnRedirect.classList.toggle("hidden", !token);
+    }
+
+    // Botão Painel de Controle no header
+    const btnProfile = document.getElementById("btn-profile");
+    if (btnProfile) {
+        btnProfile.classList.toggle("hidden", !token);
+    }
+
+    // Botão Painel de Controle no subtítulo
+    const btnPerfilRedirect = document.getElementById("btn-perfil-redirect");
+    if (btnPerfilRedirect) {
+        btnPerfilRedirect.classList.toggle("hidden", !token);
     }
 
     // Botões de navegação entre abas foram removidos do header.
@@ -3407,11 +3422,385 @@ atualizarGraficos = function() {
 };
 
 // --- Inicialização unificada ---
+// ===================================================================
+// Insights Financeiros e de Investimentos
+// ===================================================================
+
+async function carregarInsightFinanceiro() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    try {
+        const resp = await fetch("/api/insights/financial", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            exibirInsight('financial', data);
+        }
+    } catch (e) {
+        console.error("Erro ao carregar insight financeiro:", e);
+    }
+}
+
+async function carregarInsightInvestimento() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    try {
+        const resp = await fetch("/api/insights/investment", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            exibirInsight('investment', data);
+        }
+    } catch (e) {
+        console.error("Erro ao carregar insight de investimento:", e);
+    }
+}
+
+async function gerarInsightFinanceiro() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    const btn = document.getElementById("btn-generate-financial-insight");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gerando...';
+
+    try {
+        const resp = await fetch("/api/insights/financial/generate", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (resp.status === 401) { realizarLogout(); return; }
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert(err.detail || "Erro ao gerar insight.");
+            return;
+        }
+        const data = await resp.json();
+        exibirInsight('financial', data);
+        alert("Insight financeiro gerado com sucesso!");
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão ao gerar insight.");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Insights Financeiros';
+    }
+}
+
+async function gerarInsightInvestimento() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    const btn = document.getElementById("btn-generate-investment-insight");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gerando...';
+
+    try {
+        const resp = await fetch("/api/insights/investment/generate", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (resp.status === 401) { realizarLogout(); return; }
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert(err.detail || "Erro ao gerar insight.");
+            return;
+        }
+        const data = await resp.json();
+        exibirInsight('investment', data);
+        alert("Insight de investimento gerado com sucesso!");
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão ao gerar insight.");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Insights de Investimentos';
+    }
+}
+
+function exibirInsight(tipo, data) {
+    const contentId = tipo === 'financial' ? 'financial-insight-content' : 'investment-insight-content';
+    const dateId = tipo === 'financial' ? 'financial-insight-date' : 'investment-insight-date';
+    
+    const contentEl = document.getElementById(contentId);
+    const dateEl = document.getElementById(dateId);
+    if (!contentEl) return;
+
+    // Converte markdown simples (negrito, quebras de linha)
+    let html = data.content
+        .replace(/\n/g, '<br>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    
+    contentEl.innerHTML = html;
+    
+    if (dateEl && data.created_at) {
+        try {
+            const d = new Date(data.created_at);
+            dateEl.textContent = `Última atualização: ${d.toLocaleString('pt-BR')}`;
+        } catch (e) {
+            dateEl.textContent = '';
+        }
+    }
+}
+
+// ===================================================================
+// Painel de Controle (Perfil)
+// ===================================================================
+
+async function carregarPerfil() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    try {
+        const resp = await fetch("/api/profile", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (resp.status === 401) { realizarLogout(); return; }
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        
+        // Preenche formulário
+        document.getElementById("profile-name").value = data.name || "";
+        document.getElementById("profile-email").value = data.email || "";
+        document.getElementById("profile-ai-provider").value = data.ai_provider || "";
+        document.getElementById("profile-api-key").value = data.api_key || "";
+        
+        // Atualiza header com nome e email
+        atualizarHeaderUsuario(data);
+    } catch (e) {
+        console.error("Erro ao carregar perfil:", e);
+    }
+}
+
+async function salvarPerfil() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    const name = document.getElementById("profile-name").value.trim();
+    const email = document.getElementById("profile-email").value.trim();
+    const msgEl = document.getElementById("profile-save-msg");
+
+    try {
+        const resp = await fetch("/api/profile", {
+            method: "PUT",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ name, email })
+        });
+        if (resp.status === 401) { realizarLogout(); return; }
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert(err.detail || "Erro ao salvar dados.");
+            return;
+        }
+        const data = await resp.json();
+        atualizarHeaderUsuario(data);
+        msgEl.classList.remove("hidden");
+        setTimeout(() => msgEl.classList.add("hidden"), 3000);
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão.");
+    }
+}
+
+async function salvarSenha() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    const currentPassword = document.getElementById("profile-current-password").value;
+    const newPassword = document.getElementById("profile-new-password").value;
+    const msgEl = document.getElementById("password-save-msg");
+
+    if (!currentPassword || !newPassword) {
+        alert("Preencha todos os campos de senha.");
+        return;
+    }
+    if (newPassword.length < 6) {
+        alert("A nova senha deve ter no mínimo 6 caracteres.");
+        return;
+    }
+
+    try {
+        const resp = await fetch("/api/profile/password", {
+            method: "PUT",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+        });
+        if (resp.status === 401) { realizarLogout(); return; }
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert(err.detail || "Erro ao alterar senha.");
+            return;
+        }
+        document.getElementById("profile-current-password").value = "";
+        document.getElementById("profile-new-password").value = "";
+        msgEl.classList.remove("hidden");
+        setTimeout(() => msgEl.classList.add("hidden"), 3000);
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão.");
+    }
+}
+
+async function salvarConfigAI() {
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    const provider = document.getElementById("profile-ai-provider").value;
+    const apiKey = document.getElementById("profile-api-key").value.trim();
+    const msgEl = document.getElementById("ai-save-msg");
+
+    try {
+        const resp = await fetch("/api/profile/ai-config", {
+            method: "PUT",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ ai_provider: provider, api_key: apiKey })
+        });
+        if (resp.status === 401) { realizarLogout(); return; }
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert(err.detail || "Erro ao salvar configuração de IA.");
+            return;
+        }
+        msgEl.classList.remove("hidden");
+        setTimeout(() => msgEl.classList.add("hidden"), 3000);
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão.");
+    }
+}
+
+async function excluirConta() {
+    const confirmMsg = "ATENÇÃO! Esta ação é IRREVERSÍVEL.\n\n"
+        + "Todos os seus dados financeiros, investimentos, configurações e insights serão PERMANENTEMENTE EXCLUÍDOS.\n\n"
+        + "Tem certeza absoluta que deseja excluir sua conta?";
+    
+    if (!confirm(confirmMsg)) return;
+    if (!confirm("Clique em OK mais uma vez para confirmar a exclusão definitiva da sua conta.")) return;
+
+    const token = obterCookie("session_token");
+    if (!token) return;
+
+    exibirLoading(true);
+    try {
+        const resp = await fetch("/api/profile", {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert(err.detail || "Erro ao excluir conta.");
+            return;
+        }
+        alert("Conta excluída permanentemente.");
+        // Faz logout
+        document.cookie = "session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+        localStorage.clear();
+        window.location.reload();
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão ao excluir conta.");
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+function atualizarHeaderUsuario(data) {
+    const userInfo = document.getElementById("user-info");
+    const nameDisplay = document.getElementById("user-name-display");
+    const emailDisplay = document.getElementById("user-email-display");
+    const btnProfile = document.getElementById("btn-profile");
+
+    if (data.name || data.email) {
+        userInfo.classList.remove("hidden");
+        nameDisplay.textContent = data.name || "";
+        emailDisplay.textContent = data.email || "";
+    } else {
+        userInfo.classList.add("hidden");
+    }
+    
+    if (btnProfile) {
+        btnProfile.classList.remove("hidden");
+    }
+}
+
+function initPerfil() {
+    const btnSave = document.getElementById("btn-save-profile");
+    const btnPassword = document.getElementById("btn-save-password");
+    const btnAiConfig = document.getElementById("btn-save-ai-config");
+    const btnDelete = document.getElementById("btn-delete-account");
+    const deleteConfirm = document.getElementById("profile-delete-confirm");
+
+    if (btnSave) btnSave.addEventListener("click", salvarPerfil);
+    if (btnPassword) btnPassword.addEventListener("click", salvarSenha);
+    if (btnAiConfig) btnAiConfig.addEventListener("click", salvarConfigAI);
+    
+    if (btnDelete && deleteConfirm) {
+        deleteConfirm.addEventListener("change", () => {
+            btnDelete.disabled = !deleteConfirm.checked;
+        });
+        btnDelete.addEventListener("click", excluirConta);
+    }
+
+    // Botões de atalho no header
+    const btnProfile = document.getElementById("btn-profile");
+    if (btnProfile) {
+        btnProfile.addEventListener("click", () => ativarAba('tab-perfil'));
+    }
+
+    const btnPerfilRedirect = document.getElementById("btn-perfil-redirect");
+    if (btnPerfilRedirect) {
+        btnPerfilRedirect.addEventListener("click", () => ativarAba('tab-perfil'));
+    }
+}
+
+function initInsights() {
+    const btnFinancial = document.getElementById("btn-generate-financial-insight");
+    const btnInvestment = document.getElementById("btn-generate-investment-insight");
+    
+    if (btnFinancial) {
+        btnFinancial.addEventListener("click", gerarInsightFinanceiro);
+    }
+    if (btnInvestment) {
+        btnInvestment.addEventListener("click", gerarInsightInvestimento);
+    }
+}
+
+// Hook para carregar insights e perfil junto com dados
+const originalCarregarDadosDoAno = carregarDadosDoAno;
+carregarDadosDoAno = async function () {
+    await originalCarregarDadosDoAno();
+    carregarInsightFinanceiro();
+    carregarPerfil();
+};
+
+const originalCarregarInvestments = carregarInvestments;
+carregarInvestments = async function () {
+    await originalCarregarInvestments();
+    carregarInsightInvestimento();
+};
+
+// Inicialização unificada
 document.addEventListener("DOMContentLoaded", () => {
     inicializarTema();
     inicializarSeletores();
     configurarEventListeners();
     initInvestments();
     initSettings();
+    initPerfil();
+    initInsights();
     verificarAutenticacao();
 });

@@ -19,7 +19,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Versão dos assets para cache-busting: incremente manualmente ao deploy (ex: v1 -> v2) -->
-    <link rel="stylesheet" href="css/style.css?v=21">
+    <link rel="stylesheet" href="css/style.css?v=22">
 </head>
 
 <body>
@@ -176,6 +176,12 @@
             </div>
 
             <div class="header-controls">
+                <div id="user-info" class="header-user-info hidden">
+                    <span id="user-name-display" style="font-weight:600;font-size:14px;"></span>
+                    <span id="user-email-display" style="font-size:12px;color:var(--text-secondary);"></span>
+                </div>
+                <button id="btn-profile" class="btn btn-secondary hidden" title="Painel de Controle"><i
+                        class="fa-solid fa-user-gear"></i></button>
                 <button id="btn-theme-toggle" class="btn btn-secondary" title="Alternar Tema"><i
                         class="fa-solid fa-moon"></i></button>
                 <button id="btn-logout" class="btn btn-danger-outline" title="Sair"><i
@@ -191,11 +197,15 @@
             </div>
             <div id="subtitle-right-controle" class="subtitle-right">
                 <button id="btn-settings-redirect" class="btn btn-secondary" title="Gerenciar Categorias"><i class="fa-solid fa-tags"></i> Gerenciar Categorias</button>
+                <button id="btn-perfil-redirect" class="btn btn-secondary" title="Painel de Controle"><i class="fa-solid fa-user-gear"></i> Painel de Controle</button>
             </div>
             <div id="subtitle-right-carteira" class="subtitle-right hidden">
                 <p id="inv-last-updated">Cotações ainda não carregadas.</p>
                 <button id="btn-inv-refresh" class="btn btn-secondary" title="Atualizar cotações"><i class="fa-solid fa-rotate"></i></button>
                 <button id="btn-carteira-gerenciar-redirect" class="btn btn-secondary" title="Gerenciar Carteira"><i class="fa-solid fa-gear"></i> Gerenciar Carteira</button>
+            </div>
+            <div id="subtitle-right-config" class="subtitle-right hidden">
+                <p style="font-size:14px;color:var(--text-secondary);"><i class="fa-solid fa-sliders"></i> Gerencie suas configurações pessoais</p>
             </div>
         </div>
 
@@ -445,6 +455,18 @@
                         Confirmar Aporte</button>
                 </div>
             </div>
+
+            <!-- Seção de Insights de Investimentos -->
+            <div class="chart-card glass" style="margin-top:16px;">
+                <h3><i class="fa-solid fa-brain"></i> Insights de Investimentos <span style="font-size:12px;font-weight:400;color:var(--text-secondary);">(IA)</span></h3>
+                <div id="investment-insight-content" class="insight-content">
+                    <p style="color:var(--text-secondary);">Clique no botão abaixo para gerar insights sobre sua carteira de investimentos.</p>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px;">
+                    <button id="btn-generate-investment-insight" class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Insights de Investimentos</button>
+                    <span id="investment-insight-date" style="font-size:12px;color:var(--text-secondary);align-self:center;"></span>
+                </div>
+            </div>
         </div>
 
         <!-- Charts de Detalhamento (abaixo da tabela, fora do tab-editar para manter posição) -->
@@ -488,6 +510,20 @@
                 <h3><i class="fa-solid fa-chart-pie"></i> Categorias: Meta vs % Remuneração e Desvio</h3>
                 <div class="chart-container" style="height: 350px;">
                     <canvas id="chart-categoria-comparativo"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Seção de Insights Financeiros -->
+        <section class="charts-section financial-only">
+            <div class="chart-card glass">
+                <h3><i class="fa-solid fa-brain"></i> Insights Financeiros <span style="font-size:12px;font-weight:400;color:var(--text-secondary);">(IA)</span></h3>
+                <div id="financial-insight-content" class="insight-content">
+                    <p style="color:var(--text-secondary);">Clique no botão abaixo para gerar insights sobre seus dados financeiros.</p>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px;">
+                    <button id="btn-generate-financial-insight" class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Insights Financeiros</button>
+                    <span id="financial-insight-date" style="font-size:12px;color:var(--text-secondary);align-self:center;"></span>
                 </div>
             </div>
         </section>
@@ -621,7 +657,7 @@
                                         <th>Quantidade</th>
                                         <th>Preço de Compra (média)</th>
                                         <th>Preço Atual</th>
-                                        <th></th>Rendimento (%)</th>
+                                        <th>Rendimento (%)</th>
                                     </tr>
                                 </thead>
                                 <tbody id="carteira-yield-tbody">
@@ -637,10 +673,97 @@
                 </div>
             </div>
         </div>
+
+        <!-- Tab: Painel de Controle (Perfil) -->
+        <div id="tab-perfil" class="tab-content">
+            <div class="settings-container">
+                <h2><i class="fa-solid fa-user-gear"></i> Painel de Controle</h2>
+
+                <!-- Dados Pessoais -->
+                <div class="settings-card glass">
+                    <h3><i class="fa-solid fa-user"></i> Dados Pessoais</h3>
+                    <div class="settings-form">
+                        <div class="input-group">
+                            <label for="profile-name">Nome</label>
+                            <input type="text" id="profile-name" placeholder="Seu nome">
+                        </div>
+                        <div class="input-group">
+                            <label for="profile-email">Email</label>
+                            <input type="email" id="profile-email" placeholder="seu@email.com">
+                        </div>
+                        <button id="btn-save-profile" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Salvar Dados</button>
+                        <span id="profile-save-msg" class="hidden" style="margin-left:8px;color:var(--color-receita);font-size:13px;">Salvo!</span>
+                    </div>
+                </div>
+
+                <!-- Alterar Senha -->
+                <div class="settings-card glass">
+                    <h3><i class="fa-solid fa-lock"></i> Alterar Senha</h3>
+                    <div class="settings-form">
+                        <div class="input-group">
+                            <label for="profile-current-password">Senha Atual</label>
+                            <input type="password" id="profile-current-password" placeholder="Senha atual">
+                        </div>
+                        <div class="input-group">
+                            <label for="profile-new-password">Nova Senha</label>
+                            <input type="password" id="profile-new-password" placeholder="Nova senha (mín. 6 caracteres)">
+                        </div>
+                        <button id="btn-save-password" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Alterar Senha</button>
+                        <span id="password-save-msg" class="hidden" style="margin-left:8px;color:var(--color-receita);font-size:13px;">Senha alterada!</span>
+                    </div>
+                </div>
+
+                <!-- Configuração de IA -->
+                <div class="settings-card glass">
+                    <h3><i class="fa-solid fa-microchip"></i> Configuração de IA</h3>
+                    <div class="settings-form">
+                        <div class="input-group">
+                            <label for="profile-ai-provider">Provedor de IA</label>
+                            <select id="profile-ai-provider" class="custom-select">
+                                <option value="">Selecione...</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="gemini">Gemini</option>
+                                <option value="deepseek">DeepSeek</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="profile-api-key">API Key</label>
+                            <input type="password" id="profile-api-key" placeholder="Chave de API do provedor">
+                        </div>
+                        <button id="btn-save-ai-config" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Salvar Configuração de IA</button>
+                        <span id="ai-save-msg" class="hidden" style="margin-left:8px;color:var(--color-receita);font-size:13px;">Configuração salva!</span>
+                    </div>
+                </div>
+
+                <!-- Excluir Conta -->
+                <div class="settings-card glass" style="border: 1px solid var(--color-despesa);">
+                    <h3 style="color:var(--color-despesa);"><i class="fa-solid fa-triangle-exclamation"></i> Excluir Conta</h3>
+                    <div class="settings-form">
+                        <p style="color:var(--text-secondary);margin-bottom:12px;">
+                            <strong>Atenção:</strong> Esta ação é <strong>irreversível</strong>. Todos os seus dados
+                            (lançamentos financeiros, carteira de investimentos, configurações e insights)
+                            serão <strong>permanentemente excluídos</strong>.
+                        </p>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="profile-delete-confirm">
+                                <span class="checkmark"></span>
+                                Entendi e confirmo a exclusão permanente da minha conta
+                            </label>
+                        </div>
+                        <button id="btn-delete-account" class="btn btn-danger-outline" disabled style="margin-top:12px;">
+                            <i class="fa-solid fa-trash-can"></i> Excluir Minha Conta Permanentemente
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Scripts da Aplicação -->
-    <script src="js/app.js?v=21"></script>
+    <script src="js/app.js?v=22"></script>
 </body>
 
 </html>
