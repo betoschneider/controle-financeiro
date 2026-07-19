@@ -8,10 +8,13 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
+# Cria diretório data/ para o banco SQLite
+RUN mkdir -p /app/data
+
 COPY app/ ./app/
 
-# Garante que os arquivos da aplicação pertencem ao usuário app
-RUN chown -R app:app /app/app
+# Garante que os arquivos da aplicação e data pertencem ao usuário app
+RUN chown -R app:app /app/app /app/data
 
 USER app
 
