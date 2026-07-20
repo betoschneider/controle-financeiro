@@ -237,7 +237,7 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
 
         if tipo == "receita":
             total_receitas += valor
-            if t.categoria and t.categoria.strip().lower() == "remuneracao":
+            if t.categoria and t.categoria.strip().lower() == "remuneração":
                 total_remuneracao += valor
         elif tipo == "despesa":
             total_despesas += valor
