@@ -3530,12 +3530,14 @@ function exibirInsight(tipo, data) {
     const dateEl = document.getElementById(dateId);
     if (!contentEl) return;
 
-    // Converte markdown simples (negrito, quebras de linha)
-    let html = data.content
-        .replace(/\n/g, '<br>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Texto plano: só converte quebras de linha
+    const texto = data.content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
     
-    contentEl.innerHTML = html;
+    contentEl.innerHTML = texto;
     
     if (dateEl && data.created_at) {
         try {
