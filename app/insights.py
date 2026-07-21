@@ -237,8 +237,10 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
 
         if tipo == "receita":
             total_receitas += valor
-            if t.categoria and t.categoria.strip().lower() == "remuneração":
-                total_remuneracao += valor
+            if t.categoria:
+                cat_lower = t.categoria.strip().lower()
+                if cat_lower == "remuneração" or "caixinha" in cat_lower:
+                    total_remuneracao += valor
         elif tipo == "despesa":
             total_despesas += valor
         elif tipo == "investimento":
@@ -345,8 +347,8 @@ def _build_financial_prompt(db: Session, user: User, ano: Optional[int] = None) 
         "Sugira cortes em categorias especificas com valores faceis, "
         "proponha metas de investimento, ou estrategias para equilibrar o orcamento.\n\n"
         "IMPORTANTE:\n"
-        "- As porcentagens de gastos e metas sao calculadas SOBRE a Remuneracao (categoria de receita), nao sobre a Receita Total\n"
-        "- Exemplo: se a Remuneracao foi R$ 10.000 e a despesa com Alimentacao foi R$ 2.000, entao o gasto representa 20% da Remuneracao\n"
+        "- As porcentagens de gastos e metas sao calculadas SOBRE a Remuneracao (categorias 'Remuneracao' e 'Caixinha'), nao sobre a Receita Total\n"
+        "- Exemplo: se a Remuneracao + Caixinha foi R$ 10.000 e a despesa com Alimentacao foi R$ 2.000, entao o gasto representa 20% da base de calculo\n"
         "- Baseie-se APENAS nos numeros fornecidos acima\n"
         "- NAO invente valores, meses ou categorias que nao estao na tabela\n"
         "- NAO use negrito, italico, hashtags ou qualquer formato de marcacao\n"
